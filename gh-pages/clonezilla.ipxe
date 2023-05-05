@@ -1,0 +1,52 @@
+#!ipxe
+
+# Clonezilla
+# https://clonezilla.org/downloads.php
+
+set os Clonezilla
+menu ${os} version
+item 3.0.0-26 ${os} 3.0.0-26
+item 2.8.1-12 ${os} 2.8.1-12
+item 2.7.3-19 ${os} 2.7.3-19
+item 2.7.2-39 ${os} 2.7.2-39
+item 2.7.1-22 ${os} 2.7.1-22
+item 2.6.7-28 ${os} 2.6.7-28
+item 2.6.6-15 ${os} 2.6.6-15
+item 2.6.1-25 ${os} 2.6.1-25
+item other ${os} Choose other version
+choose ver || exit 0
+
+iseq ${ver} other && echo -n ${cls}Enter version: ${} ||
+iseq ${ver} other && clear ver && read ver ||
+
+iseq ${arch} x86_64 && set czl_arch amd64 || set czl_arch i686-pae
+
+iseq ${platform} efi && set boot_type kernel || set boot_type iso
+menu ${os} boot type
+item --key i iso Clonezilla ISO image [i]
+item --key k kernel Clonezilla kernel/vmlinuz boot [k]
+choose --default ${boot_type} boot_type || exit 0
+goto ${boot_type}_boot
+
+# boot iso directly from sourceforge
+:iso_boot
+set project clonezilla
+set iso ${project}_live_stable/${ver}/${project}-live-${ver}-${czl_arch}.iso
+set sfboot memdisk
+imgverify sourceforge.ipxe ${sigs}sourceforge.ipxe.sig
+chain sourceforge.ipxe
+exit
+
+:kernel_boot
+# boot from ftp.upjs.sk
+set dir mirrors/clonezilla/clonezilla_live_stable/${ver}/${czl_arch}
+set fetch ${mirror}/${dir}/live/filesystem.squashfs
+
+imgfree
+imgtrust --allow
+kernel ${mirror}/${dir}/live/vmlinuz
+#imgverify vmlinuz ${sigs}${dir}/live/vmlinuz.sig
+initrd ${mirror}/${dir}/live/initrd.img
+#imgverify initrd.img ${sigs}${dir}/live/initrd.img.sig
+imgargs vmlinuz initrd=initrd.img boot=live config noswap nolocales edd=on nomodeset ocs_live_run="ocs-live-general" ocs_live_extra_param="" ocs_live_keymap="" ocs_live_batch="no" ocs_lang="" vga=788 nosplash noprompt fetch=${fetch} ${params}
+boot

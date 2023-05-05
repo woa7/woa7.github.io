@@ -1,0 +1,10 @@
+#!ipxe
+
+set iso super_grub2_disk_hybrid_1.99b1.iso
+
+imgtrust --allow
+kernel ${url}memdisk iso raw ${params}
+imgverify memdisk ${sigs}memdisk.sig
+#initrd http://forja.cenatic.es/frs/download.php/1384/${iso}
+initrd http://download.berlios.de/supergrub/${iso}
+boot

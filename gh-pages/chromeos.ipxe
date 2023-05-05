@@ -1,0 +1,16 @@
+#!ipxe
+
+# This doesn't really works. ChoromeOS can't find it's ISO image if
+# it's booted using memdisk. :-(
+
+set dir mirrors/images
+set image Chrome_OS_Linux.i686-1.9.1077.iso
+
+#sanboot ${mirror}/${dir}/${image}
+
+imgtrust --allow
+kernel ${url}memdisk iso raw ${params}
+#imgverify memdisk ${sigs}memdisk.sig
+initrd ${mirror}/${dir}/${image}
+#imgverify ${image} ${sigs}${dir}/${image}.sig
+boot

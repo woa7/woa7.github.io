@@ -1,0 +1,178 @@
+#!ipxe
+
+set fedora_latest 37
+
+iseq ${platform} efi && set predef_part_boot efi=128m || set predef_part_boot biosboot=2m
+
+menu Predefined systems
+item --key f fedora Fedora ${fedora_latest} kickstart vnc ttyS0 [f]
+item --key c centos8 CentOS 8 kickstart vnc ttyS0 [c]
+item --key 7 centos7 CentOS 7 kickstart vnc ttyS0 [c]
+item --key 6 centos6 CentOS 6 kickstart vnc ttyS0 [6]
+item --gap
+item --gap WARNING! Systems below this line can kill your current installation!
+item --gap WARNING! Use with caution!
+item --gap
+item --key D fedora_devel Fedora development auto KMS [D]
+item --key M fedora_devel_nomodeset Fedora development auto text nomodeset [M]
+item --key F fedora_auto Fedora ${fedora_latest} auto [F]
+item --key N centos9stream_auto CentOS 9-Stream auto [N]
+item --key S centos8stream_auto CentOS 8-Stream auto [S]
+item --key C centos8_auto CentOS 8 auto [C]
+item --key P centos7_auto CentOS 7 auto [P]
+item --key L almalinux9_auto AlmaLinux 9 auto [L]
+item --key A almalinux8_auto AlmaLinux 8 auto [A]
+item --key B debian_auto Debian auto [B]
+item --key T test Test config [T]
+choose system || exit
+goto predef_${system}
+
+:predef_fedora
+set menu fedora
+set ver ${fedora_latest}
+set fed_product Server
+set bt ks
+set params ${params} vnc vncconnect=${admin_ip}:5500 console=tty0 console=ttyS0
+imgverify fedora.ipxe ${sigs}fedora.ipxe.sig
+chain fedora.ipxe
+exit
+
+:predef_centos8
+set menu centos
+set ver 8
+set bt ks
+set params ${params} vnc vncconnect=${admin_ip}:5500 console=tty0 console=ttyS0
+imgverify fedora.ipxe ${sigs}fedora.ipxe.sig
+chain fedora.ipxe
+exit
+
+:predef_centos7
+set menu centos
+set ver 7
+set bt ks
+set params ${params} vnc vncconnect=${admin_ip}:5500 console=tty0 console=ttyS0
+imgverify fedora.ipxe ${sigs}fedora.ipxe.sig
+chain fedora.ipxe
+exit
+
+:predef_centos6
+set menu centos
+set ver 6
+set bt ks
+set params ${params} vnc vncconnect=${admin_ip}:5500 console=tty0 console=ttyS0
+imgverify fedora.ipxe ${sigs}fedora.ipxe.sig
+chain fedora.ipxe
+exit
+
+:predef_fedora_auto
+set menu fedora
+set ver ${fedora_latest}
+set fed_product Server
+set bt ks
+# add ${params} as last to allow override
+set params part=${predef_part_boot},root=6,swap=1 disks=vda console=tty0 console=ttyS0 pkgs=salpack,-iwl*-firmware ${params}
+imgverify fedora.ipxe ${sigs}fedora.ipxe.sig
+chain fedora.ipxe
+exit
+
+:predef_centos9stream_auto
+set menu centos
+set ver 9-stream
+set bt ks
+:predef_centos_stream_params
+# add ${params} as last to allow override
+set params part=${predef_part_boot},root=8,vg=vg1,swap=1 disks=vda console=tty0 console=ttyS0 pkgs=salpack-guest,-*-firmware ${params}
+#set params part=${predef_part_boot},root=8,vg=vg1,swap=1 disks=vda console=tty0 console=ttyS0 pkgs=salpack,-iwl*-firmware ${params}
+# linux-firmware required by centos 9,-*-firmware
+imgverify fedora.ipxe ${sigs}fedora.ipxe.sig
+chain fedora.ipxe
+exit
+
+:predef_centos8stream_auto
+set menu centos
+set ver 8-stream
+set bt ks
+goto predef_centos_stream_params
+
+:predef_centos8_auto
+set menu centos
+set ver 8
+set bt ks
+# add ${params} as last to allow override
+set params part=${predef_part_boot},root=8,vg=vg1,swap=1 disks=vda console=tty0 console=ttyS0 pkgs=salpack-guest,-*-firmware ${params}
+#set params part=${predef_part_boot},root=8,vg=vg1,swap=1 disks=vda console=tty0 console=ttyS0 pkgs=salpack,-iwl*-firmware ${params}
+# linux-firmware required by centos 8,-*-firmware
+imgverify fedora.ipxe ${sigs}fedora.ipxe.sig
+chain fedora.ipxe
+exit
+
+:predef_centos7_auto
+set menu centos
+set ver 7
+set bt ks
+# add ${params} as last to allow override
+set params part=${predef_part_boot},root=8,vg=vg1,swap=1 disks=vda console=tty0 console=ttyS0 pkgs=salpack-guest,-*-firmware ${params}
+#set params part=${predef_part_boot},root=8,vg=vg1,swap=1 disks=vda console=tty0 console=ttyS0 pkgs=salpack,-iwl*-firmware ${params}
+imgverify fedora.ipxe ${sigs}fedora.ipxe.sig
+chain fedora.ipxe
+exit
+
+:predef_almalinux9_auto
+set menu almalinux
+set ver 9
+set bt ks
+# add ${params} as last to allow override
+set params part=${predef_part_boot},root=8,vg=vg1,swap=1 disks=vda console=tty0 console=ttyS0 pkgs=salpack-guest,-*-firmware ${params}
+#set params part=${predef_part_boot},root=8,vg=vg1,swap=1 disks=vda console=tty0 console=ttyS0 pkgs=salpack,-iwl*-firmware ${params}
+# linux-firmware required by centos 8,-*-firmware
+imgverify almalinux.ipxe ${sigs}almalinux.ipxe.sig
+chain almalinux.ipxe
+exit
+
+:predef_almalinux8_auto
+set menu almalinux
+set ver 8
+set bt ks
+# add ${params} as last to allow override
+set params part=${predef_part_boot},root=8,vg=vg1,swap=1 disks=vda console=tty0 console=ttyS0 pkgs=salpack-guest,-*-firmware ${params}
+#set params part=${predef_part_boot},root=8,vg=vg1,swap=1 disks=vda console=tty0 console=ttyS0 pkgs=salpack,-iwl*-firmware ${params}
+# linux-firmware required by centos 8,-*-firmware
+imgverify almalinux.ipxe ${sigs}almalinux.ipxe.sig
+chain almalinux.ipxe
+exit
+
+:predef_debian_auto
+set menu debian
+set ver stretch
+set debmirror http://ftp.${country}.debian.org/debian/
+set params ${params} part=${predef_part_boot},root=4,vg=vg1,swap=1 disks=vda
+set type automated
+imgverify deb.ipxe ${sigs}deb.ipxe.sig
+chain deb.ipxe
+exit
+
+:predef_fedora_devel
+set menu fedora
+set ver development
+set fed_product Server
+set bt ks
+set params ${params} part=${predef_part_boot},root=3,swap=1 disks=vda zerombr
+imgverify fedora.ipxe ${sigs}fedora.ipxe.sig
+chain fedora.ipxe
+exit
+
+:predef_fedora_devel_nomodeset
+set menu fedora
+#set ver development
+set ver alt_stage
+set fed_product Server
+set bt ks
+set params ${params} text nomodeset part=${predef_part_boot},root=3,swap=1
+imgverify fedora.ipxe ${sigs}fedora.ipxe.sig
+chain fedora.ipxe
+exit
+
+:predef_test
+imgtrust --allow
+chain test.ipxe
+exit

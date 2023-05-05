@@ -1,0 +1,24 @@
+#!ipxe
+
+# https://www.system-rescue.org/Download/
+
+set os SystemRescue
+set project systemrescuecd
+
+menu ${os}
+item 10.00 ${os} 10.00
+item 9.06 ${os} 9.06
+item 8.07 ${os} 8.07
+item 7.01 ${os} 7.01
+item 6.1.8 ${os} 6.1.8
+item 6.0.7 ${os} 6.0.7
+item 5.3.2 ${os} 5.3.2
+choose ver || exit 0
+
+set iso sysresccd-x86/${ver}/systemrescue-${ver}-${arch_a}.iso
+set isourl http://sourceforge.net/projects/${project}/files/${iso}/download
+#set sfboot sanboot
+set sfboot memdisk
+
+imgverify sourceforge.ipxe ${sigs}sourceforge.ipxe.sig
+chain sourceforge.ipxe

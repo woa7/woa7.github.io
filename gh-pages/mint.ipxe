@@ -1,0 +1,20 @@
+#!ipxe
+
+# This does not really works. Testing only.
+# Linux Mint requires NFS to boot over ipxe. :-(
+
+set ver 21
+set desktop cinnamon
+#set desktop mate
+
+set dir stable/${ver}/linuxmint-${ver}-${desktop}-${bits}bit.iso
+iseq ${mirror} ${default_mirror} && set mirror http://mirrors.nic.cz/linuxmint-cd ||
+set iso ${mirror}/${dir}
+
+sanboot ${iso} || echo Trying memdisk method.
+
+imgtrust --allow
+kernel ${url}memdisk iso raw ${params}
+imgverify memdisk ${sigs}memdisk.sig
+initrd ${iso}
+boot

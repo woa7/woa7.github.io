@@ -1,0 +1,142 @@
+#!ipxe
+
+:tools_menu
+menu Tools
+item --key p lspci ${space} List PCI devices [p]
+item --key n netinfo ${space} Network card info [n]
+item --key h hdt ${space} Hardware detection tool [h]
+item --key c pcmemtest ${space} PCMemTest [c]
+item --key m memtest610 ${space} Memtest86+ 6.10 [m]
+item memtest6 ${space} Memtest86+ 6.00
+item memtest5 ${space} MemTest86+ 5.01
+item memtest4 ${space} MemTest86+ 4.20
+item memtest7 ${space} MemTest86 7.4
+item --key a boothda ${space} Boot local HDD0 (hda) [a]
+item --key b boothdb ${space} Boot local HDD1 (hdb) [b]
+item --key s shell ${space} iPXE shell [s]
+choose tool || exit
+echo ${cls}
+goto tool_${tool} ||
+exit
+
+:tool_netinfo
+menu Select network card
+item netX Default (netX)
+set idx:int32 0
+:sel_card_loop isset ${net${idx}/mac} || goto sel_card_done
+  item net${idx} net${idx}
+  inc idx && goto sel_card_loop
+:sel_card_done
+choose netcard || goto tools_menu
+
+:tool_netinfo_show
+menu Network info for ${netcard}
+item --gap Chip:
+item chip ${space} ${${netcard}/chip}
+item --gap MAC:
+item mac ${space} ${${netcard}/mac}
+item --gap IP/mask:
+item ip ${space} ${${netcard}/ip}/${${netcard}/netmask}
+item --gap Gateway:
+item gw ${space} ${${netcard}/gateway}
+item --gap Domain:
+item domain ${space} ${${netcard}/domain}
+item --gap DNS:
+item dns ${space} ${${netcard}/dns}
+item --gap DHCP server:
+item dhcpserver ${space} ${${netcard}/dhcp-server}
+item --gap Next-server:
+item nextserver ${space} ${next-server}
+item --gap Filename:
+item filename ${space} ${${netcard}/filename}
+choose empty ||
+goto tools_menu
+
+:tool_hdt
+set 209:string hdt
+set 210:string ${url}pxelinux.cfg/
+kernel ${url}pxelinux.0
+imgverify pxelinux.0 ${sigs}pxelinux.0.sig
+#kernel ${url}pxelinux.cfg/lpxelinux.0
+#imgverify lpxelinux.0 ${sigs}pxelinux.cfg/lpxelinux.0.sig
+boot
+goto tools_menu
+
+:tool_pcmemtest
+iseq ${platform} efi && set pcmemtest memtest.efi || set pcmemtest memtest.bin
+kernel images/pcmemtest/${pcmemtest} smp
+imgverify ${pcmemtest} ${sigs}images/pcmemtest/${pcmemtest}.sig
+boot
+goto tools_menu
+
+:tool_memtest
+# boot memtest
+imgverify ${url}images/mt86plus/${memtest} ${sigs}images/mt86plus/${memtest}.sig
+set errno 0 # reset
+chain ${memtest} ${params} && goto main_menu ||
+iseq ${errno} 0 && goto main_menu ||
+echo MEMORY ERROR DETECTED! ${errno}
+prompt Press any key to continue ...
+goto tools_menu
+
+:tool_memtest610
+iseq ${platform} efi && set memtest_platform efi || set memtest_platform bin
+iseq ${arch} i386 && set memtest_arch 32 || set memtest_arch 64
+set img images/mt86plus/610/${memtest_arch}/memtest.${memtest_platform}
+kernel ${url}${img}
+imgverify memtest.${memtest_platform} ${sigs}${img}.sig
+chain memtest.${memtest_platform}
+goto tools_menu
+
+:tool_memtest6
+iseq ${platform} efi && goto tool_memtest6_efi ||
+#kernel ${url}memdisk iso raw ${params}
+#imgverify memdisk ${sigs}memdisk.sig
+iseq ${arch} i386 && set memtest_arch 32 || set memtest_arch 64
+#initrd ${url}images/mt86plus/mt86plus${memtest_arch}.iso
+#imgverify mt86plus${memtest_arch}.iso ${sigs}images/mt86plus/mt86plus${memtest_arch}.iso.sig
+kernel ${url}images/mt86plus/floppy${memtest_arch}.img
+imgverify floppy${memtest_arch}.img ${sigs}images/mt86plus/floppy${memtest_arch}.img.sig
+boot
+goto tools_menu
+:tool_memtest6_efi
+iseq ${arch} i386 && set memtest_arch ia32 || set memtest_arch x64
+set memtest images/mt86plus/boot${memtest_arch}.efi
+kernel ${memtest}
+imgverify boot${memtest_arch}.efi ${sigs}${memtest}.sig
+chain boot${memtest_arch}.efi
+goto tools_menu
+
+:tool_memtest5
+# Memtest 5.01 vmlinuz has problems to boot on real machine.
+# See http://ipxe.org/err/460381 for more information.
+# Using memtest from boot.ipxe.org.
+set memtest memtest501.0
+goto tool_memtest
+
+:tool_memtest4
+set memtest memtest420.0
+goto tool_memtest
+
+:tool_memtest7
+kernel ${url}memdisk iso raw ${params}
+imgverify memdisk ${sigs}memdisk.sig
+initrd ${url}images/Memtest86-7.4.iso
+imgverify Memtest86-7.4.iso ${sigs}images/Memtest86-7.4.iso.sig
+boot
+goto tools_menu
+
+:tool_lspci
+imgverify lspci.ipxe ${sigs}lspci.ipxe.sig
+chain lspci.ipxe
+goto tools_menu
+
+:tool_boothda
+sanboot --no-describe --drive 0x80 ||
+read any_key
+goto tools_menu
+
+:tool_boothdb
+sanboot --no-describe --drive 0x81 ||
+read any_key
+goto tools_menu

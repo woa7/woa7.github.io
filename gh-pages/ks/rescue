@@ -1,0 +1,49 @@
+#"rescue" configuration
+# System keyboard
+#keyboard us
+# System language
+#lang sk_SK.UTF-8
+#lang en_US.UTF-8
+# Rescue OS instead of upgrade
+rescue
+
+%pre --interpreter /bin/bash
+cat > /sbin/salpack-init-md-lvm << EOF
+#!/bin/bash
+
+# stop all LVM and md devices
+vgchange -an > /dev/null 2> /dev/null
+for i in 0 \`seq 127\`; do
+  mdadm -S /dev/md\$i > /dev/null 2> /dev/null
+done
+
+# start md and LVM
+mdadm -A --scan --run
+vgchange -ay
+EOF
+
+cat > /sbin/salpack-sysmount << EOF
+#!/bin/bash
+
+if [ -z "\$1" ]; then
+  echo "Usage: \$1 root_device"
+  exit
+fi
+
+if [ "\$1" = "-u" ]; then
+  for dir in dev proc sys; do
+    umount /\$dir /mnt/sysimage/\$dir
+  done
+  umount /mnt/sysimage
+else
+  mount \$1 /mnt/sysimage
+  for dir in dev proc sys; do
+    mount --bind /\$dir /mnt/sysimage/\$dir
+  done
+  echo "Entering chroot ..."
+  chroot /mnt/sysimage
+fi
+EOF
+
+chmod +x /sbin/salpack*
+%end

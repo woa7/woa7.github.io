@@ -1,0 +1,128 @@
+# Ubuntu kickstart
+#based on "pc" configuration
+# Accepted kernel parameters:
+#   part=root=4,swap=4,var=20
+#   disks=vda,vdb
+#
+# System authorization information and root password
+auth --useshadow  --enablemd5
+rootpw --iscrypted $6$u5FhpPHs$N69Gq3rAUVCzyCHUiiH5fScNPPgB0qVAGhlJ52g5XE.R5BSepuH.BmwyMjOYnM9n3ew0cE0VIajJirBKY/Mzm0
+# System bootloader configuration
+bootloader --location=mbr
+# Firewall configuration (ssh is enabled by default)
+#firewall --enabled
+# System language
+#lang sk_SK.UTF-8
+lang en_US.UTF-8
+# Language modules to install
+langsupport en_US.UTF-8
+# System keyboard
+keyboard us
+# Installation logging level
+#logging info
+# Network information
+network --bootproto=dhcp
+#vnc --host=158.197.240.41 --port=5500
+# Reboot after installation
+reboot
+# System timezone
+timezone --utc Europe/Bratislava
+# Install OS instead of upgrade
+install
+# Use mirror
+url --url http://cz.archive.ubuntu.com/ubuntu/
+
+#Use our local repo instead of going out to the internet
+preseed mirror/country string cz
+#preseed mirror/http/hostname string internal-server
+#preseed mirror/http/directory string /archive-ubuntu
+#preseed mirror/http/proxy string
+#preseed mirror/http/mirror internal-server
+
+# Ubuntu's installer not to make a non-root user during installation
+preseed passwd/make-user boolean false
+#preseed user-setup/allow-password-weak boolean true
+
+# Ubuntu Kickstart Syntax: Check "Install any security updates automatically"
+preseed pkgsel/update-policy select unattended-upgrades
+
+# Make minimalistic install
+preseed tasksel/first multiselect
+preseed tasksel/skip-tasks multiselect server
+preseed pkgsel/ubuntu-standard boolean false
+preseed base-installer/install-recommends boolean false
+preseed base-installer/kernel/override-image string linux-virtual
+preseed pkgsel/install-language-support boolean false
+
+%include /tmp/salstar1.ks
+%include /tmp/salstar2.ks
+%pre
+# partition definition
+parts_root=/
+parts_swap=swap
+parts_boot=/boot
+parts_var=/var
+parts_home=/home
+parts_tmp=/tmp
+parts_www=/var/www
+parts_mysql=/var/lib/mysql
+parts_pgsql=/var/lib/pgsql
+parts_mongodb=/var/lib/mongodb
+parts_redis=/var/lib/redis
+parts_squid=/var/spool/squid
+parts_opt=/opt
+
+parts=$(tr ' ' '\n' < /proc/cmdline | grep '^part=' | sed 's/^part=//' | tr , ' ')
+disks=$(tr ' ' '\n' < /proc/cmdline | grep '^disks*=' | sed 's/^disks*=//')
+fs="" #"--fstype=ext4"
+cfg1=/tmp/salstar1.ks
+touch $cfg1
+
+mirror=0
+if echo $disks | grep -q ,; then
+  mirror=1
+  raid=0
+  disk1=$(echo $disks | cut -d, -f1)
+  disk2=$(echo $disks | cut -d, -f2)
+  #echo "ignoredisk --only-use=$disks"
+  echo "zerombr"
+  echo "clearpart --drives=$disk1 --all --initlabel"
+  echo "clearpart --drives=$disk2 --all --initlabel"
+elif [ "$disks" ]; then
+  #echo "ignoredisk --only-use=$disks"
+  echo "zerombr"
+  echo "clearpart --drives=$disks --all --initlabel"
+fi > /tmp/salstar1.ks
+
+for part in $parts; do
+  name=$(echo $part | cut -d= -f1)
+  value=$(echo $part | cut -d= -f2)
+  if [ "$name" = "vg" ]; then
+    vg=$value
+    if [ $mirror = 1 ]; then
+      echo "part raid.${raid}1 --size=1 --grow --ondisk=$disk1" >> $cfg1
+      echo "part raid.${raid}2 --size=1 --grow --ondisk=$disk2" >> $cfg1
+      echo "raid pv.01 --level=1 --device=md$raid raid.${raid}1 raid.${raid}2"
+      echo "volgroup $vg pv.01"
+      raid=$((raid+1))
+    else
+      echo "part pv.01 --size=$size"
+      echo "volgroup $vg pv.01"
+    fi
+    continue
+  fi
+  size=$((value*1024))
+  partdir=$(eval echo \$parts_$name)
+  echo "# $part, mirror=$mirror, vg=$vg"
+  if [ "$vg" ]; then
+    echo "logvol $partdir $fs --size=$size --vgname=$vg --name=$name"
+  elif [ $mirror = 1 ]; then
+    echo "part raid.${raid}1 --size=$size --ondisk=$disk1" >> $cfg1
+    echo "part raid.${raid}2 --size=$size --ondisk=$disk2" >> $cfg1
+    echo "raid $partdir --level=1 --device=md$raid $fs raid.${raid}1 raid.${raid}2"
+    raid=$((raid+1))
+  else
+    echo "part $partdir $fs --size=$size"
+  fi
+done >> /tmp/salstar2.ks
+exit 0

@@ -1,0 +1,26 @@
+#!ipxe
+
+imgfree
+imgtrust --allow
+
+set mirrorurl http://ftp.linux.cz/pub/linux/arch/
+set extrabootoptions ip=dhcp net.ifnames=0 BOOTIF=01-${netX/mac}
+
+#chain http://www.archlinux.org/static/netboot/ipxe.pxe
+#chain https://archlinux.org/static/netboot/ipxe.419cd003a298.lkrn
+#chain https://ipxe.archlinux.org/releng/netboot/archlinux.ipxe
+
+menu Arch Linux Netboot: Select Release
+item --gap Available releases:
+item 2021.04.01 2021.04.01
+item 2021.03.01 2021.03.01
+item 2021.02.01 2021.02.01
+choose release
+
+kernel ${mirrorurl}iso/${release}/arch/boot/x86_64/vmlinuz-linux
+initrd ${mirrorurl}iso/${release}/arch/boot/amd-ucode.img
+initrd ${mirrorurl}iso/${release}/arch/boot/x86_64/initramfs-linux.img
+imgargs vmlinuz-linux initrd=amd-ucode.img initrd=intel-ucode.img initrd=initramfs-linux.img archiso_http_srv=${mirrorurl}iso/${release}/ archisobasedir=arch verify=y ${extrabootoptions} ${params}
+boot
+
+exit

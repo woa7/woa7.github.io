@@ -1,0 +1,1681 @@
+From 5ecfe27057679277fa36a664e80c10d3eb9ae5ee Mon Sep 17 00:00:00 2001
+From: ondrejj <ondrejj@c21728ea-8e09-0410-9ecb-e72249775932>
+Date: Mon, 9 Apr 2012 19:59:01 +0000
+Subject: [PATCH] update
+
+git-svn-id: file:///var/svn/pxeboot@2936 c21728ea-8e09-0410-9ecb-e72249775932
+---
+ ipxe/Makefile    |  28 ++++++++
+ ipxe/dos.ipxe    |  43 +++++++++++
+ ipxe/link.ipxe   |  26 +++++++
+ ipxe/script.ipxe | 215 +++++++++++++++++++++++++++++++++++++++++++++++++++++++
+ 4 files changed, 312 insertions(+)
+
+diff --git a/ipxe/Makefile b/ipxe/Makefile
+new file mode 100644
+index 0000000000000000000000000000000000000000..deb15b17c583cc31f4e4b81f784bf7cdc13fa557
+--- /dev/null
++++ b/ipxe/Makefile
+@@ -0,0 +1,28 @@
++IPXEDIR=../../../c/ipxe/src
++TARGETS=bin/ipxe.lkrn bin/ipxe.pxe bin/ipxe.iso
++MEM=768
++NETMODEL=virtio
++NET=-net nic,model=$(NETMODEL) -net user
++
++all:	compile copy
++
++compile:
++	make -j1 -C $(IPXEDIR) EMBEDDED_IMAGE=`pwd`/link.ipxe \
++		TRUST=`pwd`/upjs.pem,`pwd`/terena.pem \
++		$(TARGETS)
++
++copy:
++	for i in $(TARGETS); do \
++		cp -a $(IPXEDIR)/$$i .; \
++	done
++
++test:	all
++	../rsync
++	qemu-kvm -m $(MEM) -kernel $(IPXEDIR)/bin/ipxe.lkrn $(NET) $(ARGS)
++
++freedos:
++	zip /tmp/fd11live.img.zip fd11live.img
++	rsync -avP ./fd11live.img /tmp/fd11live.img.zip \
++		mirror@ftp:/home/ftp/pub/mirrors/freedos/1.1/
++	gzip -c1 fd11live.img | ssh mirror@ftp \
++		dd of=/home/ftp/pub/mirrors/freedos/1.1/fd11live.img.gz
+diff --git a/ipxe/dos.ipxe b/ipxe/dos.ipxe
+new file mode 100644
+index 0000000000000000000000000000000000000000..4836e88e73b5037cb3a06cc47a309813b10e95be
+--- /dev/null
++++ b/ipxe/dos.ipxe
+@@ -0,0 +1,43 @@
++#!ipxe
++
++:dos_menu
++menu FreeDOS
++item --key i install FreeDOS 1.1 src (installation iso) [i]
++item --key l live FreeDOS 1.1 Live [l]
++item --key c custom_iso Boot custom CDROM ISO image [c]
++item --key d custom_img Boot custom FD/HDD image [d]
++item --key u ubcd UBCD - Ultimate boot CD [u]
++choose value || goto dos_menu
++goto boot_dos_${value}
++
++:boot_dos_install
++set dir ${mirror}/mirrors/freedos/1.1
++kernel ${url}memdisk iso ${params} || goto die
++initrd ${dir}/fd11src.iso || goto die
++boot
++
++:boot_dos_live
++set dir ${mirror}/mirrors/freedos/1.1
++kernel ${url}memdisk raw keeppxe ${params} || goto die
++initrd ${dir}/fd11live.img.zip || goto die
++boot
++
++:boot_dos_custom_iso
++kernel ${url}memdisk iso ${params} || goto die
++goto enter_path
++
++:boot_dos_custom_img
++kernel ${url}memdisk ${params} || goto die
++goto enter_path
++
++:enter_path
++echo -n Enter image URL: ${}
++read imgurl
++isset ${imgurl} || goto dos_menu
++initrd ${imgurl} || goto enter_path
++boot
++
++:boot_dos_ubcd
++kernel ${url}memdisk iso keeppxe ${params} || goto die
++initrd http://www.salstar.sk/pxe/test/ubcd511.iso || goto die
++boot
+diff --git a/ipxe/link.ipxe b/ipxe/link.ipxe
+new file mode 100644
+index 0000000000000000000000000000000000000000..908f83357c3d54e19f0ac385bb433c1382b6cd07
+--- /dev/null
++++ b/ipxe/link.ipxe
+@@ -0,0 +1,26 @@
++#!ipxe
++
++:start
++dhcp || goto shell
++
++:boot
++set base https://www.salstar.sk/pxe/ipxe/
++chain ${base}${mac} ||
++chain ${base}${ip} ||
++chain ${base}script.ipxe ||
++echo Internal script failed!
++shell
++goto start
++
++:shell
++echo If you need to boot in specific vlan, type: goto vlan
++echo If you need to boot again, type: exit
++shell
++goto start
++
++:vlan
++echo -n Enter VLAN #: ${}
++read vlan
++vcreate --tag ${vlan} net0
++dhcp net0-${vlan}
++goto boot
+diff --git a/ipxe/script.ipxe b/ipxe/script.ipxe
+new file mode 100644
+index 0000000000000000000000000000000000000000..245f48e55bf8b0e446080a34032be492a2aca4e2
+--- /dev/null
++++ b/ipxe/script.ipxe
+@@ -0,0 +1,215 @@
++#!ipxe
++
++set url https://www.salstar.sk/pxe/
++set mirror http://ftp.upjs.sk/pub
++#set url tftp://158.197.16.70/
++isset ${admin_ip} || set admin_ip 158.197.240.41
++isset ${bits} || set bits 64
++isset ${arch} || set arch x86_64
++set cls:hex 1b:5b:4a  # ANSI clear screen sequence - "^[[J"
++isset ${menu} && goto ${menu} ||
++
++isset ${ip} || dhcp || echo DHCP failed
++
++:main_menu
++clear version
++set space:hex 20:20
++menu SAL's iPXE MENU
++item --gap Default:
++item --key l local ${space} Boot local hdd [l]
++item --gap Linux systems:
++item --key f fedora ${space} Fedora ${arch} [f]
++item --key c centos ${space} CentOS ${arch} [c]
++item --key d freedos ${space} FreeDOS [d]
++item --gap Options:
++iseq ${menu} changebits && set default --default || set default --
++item --key a ${default} changebits ${space} Architecture: ${arch} (${bits}bit) [a]
++iseq ${menu} params_menu && set default --default || set default --
++item --key 0x09 ${default} params_menu ${space} Kernel parameters: ${params}
++item --gap Tools:
++item --key x pxelinux ${space} Chainload pxelinux menu [x]
++item --key h hdt ${space} Hardware detection tool [h]
++item --key p pmagic ${space} Parted Magic [p]
++item --key m memtest ${space} MemTest86+ [m]
++item --key s shell ${space} iPXE shell [s]
++isset ${menu} && set timeout 0 || set timeout 60000
++choose --timeout ${timeout} menu || goto local
++echo ${cls}
++goto ${menu}
++
++:local
++exit
++
++:pxelinux
++echo Loading pxelinux ...
++set 209:string pxelinux.cfg/default
++set 210:string ${url}
++chain ${url}pxelinux.0 || goto die
++
++:hdt
++set 209:string pxelinux.cfg/hdt
++set 210:string ${url}
++chain ${url}pxelinux.0 || goto die
++
++:pmagic
++initrd ${url}pmagic/initrd.img || goto die
++chain ${url}pmagic/bzImage edd=off load_ramdisk=1 prompt_ramdisk=0 rw vga=normal loglevel=9 max_loop=256 || goto die
++
++:memtest
++set 209:string pxelinux.cfg/memtest
++set 210:string ${url}
++chain ${url}pxelinux.0 || goto die
++chain ${url}memtest/memtest || goto die
++
++:shell
++echo Type "exit" to return to menu.
++shell
++goto main_menu
++
++:die
++echo Error occured, press any key ...
++prompt --timeout 60000
++exit
++
++:changebits
++iseq ${bits} 32 && set bits 64 || set bits 32
++iseq ${bits} 32 && set arch i386 || set arch x86_64
++goto main_menu
++
++:params_menu
++menu Kernel parameters
++item --gap Current: ${params}
++item --gap
++item --key x exit Return to main menu [x]
++item --key s set Set parameters [s]
++item --key v vnc VNC installation [v]
++item --key 0 ttyS0 Serial console ttyS0 [0]
++item --key 1 ttyS1 Serial cosnole ttyS1 [1]
++choose kp || goto main_menu
++echo ${cls}
++goto params_${kp}
++
++# Kernel parameters
++:params_set
++echo -n Enter parameters: ${} && read params
++goto params_menu
++
++:params_vnc
++set params ${params} vnc vncconnect=${admin_ip}:5500
++goto params_menu
++
++:params_ttyS0
++set params ${params} console=ttyS0
++goto params_menu
++
++:params_ttyS1
++set params ${params} console=ttyS1
++goto params_menu
++
++:params_exit
++goto main_menu
++
++# OS
++:fedora
++set os Fedora
++menu Fedora
++item --key 6 16 ${os} 16 ${arch} [6]
++item --key 5 15 ${os} 15 ${arch} [5]
++item --key a 17-Alpha ${os} 17-Aplha ${arch} [a]
++item --key d development ${os} 17 (development) ${arch} [d]
++isset ${version} || choose version || goto main_menu
++echo ${cls}
++goto fedora_${version} ||
++set dir ${mirror}/fedora/linux/releases/${version}/${os}/${arch}/os
++:fedora_setvars
++set osks http://www.salstar.sk/ks/auto
++goto boottype
++
++:fedora_17-Alpha
++set dir ${mirror}/fedora/linux/releases/test/${version}/${os}/${arch}/os
++set params root=live:${dir}/LiveOS/squashfs.img ${params}
++goto fedora_setvars
++
++:fedora_development
++set dir ${mirror}/fedora/linux/development/17/${arch}/os
++set params root=live:${dir}/LiveOS/squashfs.img ${params}
++goto fedora_setvars
++
++:fedora_live
++set dir ${mirror}/fedora/linux/releases/${version}/Live/${arch}
++set img ${os}-${version}-${arch}-Live-Desktop.iso
++prompt
++exit
++
++:centos
++set os CentOS
++menu CentOS
++item --key 6 6 ${os} 6 ${arch} [6]
++item --key 5 5 ${os} 5 ${arch} [5]
++isset ${version} || choose version || goto main_menu
++echo ${cls}
++set dir ${mirror}/centos/${version}/os/${arch}
++set osks http://www.salstar.sk/ks/centos${version}
++goto boottype
++
++:boottype
++set ova ${os} ${version} ${arch}
++menu ${os} boot type
++item normal ${ova}
++item --key k ks ${ova} kickstart [k]
++item --key r rescue ${ova} rescue [r]
++item --key s remote ${ova} rescue with ssh [s]
++item --key a autopart ${ova} kickstart part=root=4 [a]
++item --key i isolinux ${ova} direct boot using isolinux [i]
++item --key l live_desktop ${ova} Live Desktop [l]
++item --key d live_kde ${ova} Live KDE [d]
++isset ${bt} || choose bt || goto main_menu
++echo ${cls}
++iseq ${bt} ks && set params ksdevice=bootif ks=${osks} ${params} ||
++iseq ${bt} rescue && set params rescue ${params} ||
++iseq ${bt} remote && set params ksdevice=bootif ks=http://www.salstar.sk/ks/rescue ${params} ||
++iseq ${bt} autopart && set params ksdevice=bootif ks=${osks} root=part=4 ${params} ||
++goto bootos_${bt} ||
++goto bootos_images
++
++:bootos_images
++echo Loading from ${dir}/isolinux/
++echo   method=${dir}
++echo   ${kickstart} ${rescue} ${params}
++#set next-server 158.197.16.70
++# load vmlinuz and initrd
++kernel ${dir}/isolinux/vmlinuz nodhcp method=${dir} ${params} || goto die
++initrd ${dir}/isolinux/initrd.img || goto die
++imgstat
++isset ${debug} && prompt ||
++boot
++exit
++
++:bootos_isolinux
++echo Loading isolinux from ${dir}/isolinux/
++set 209:string isolinux.cfg
++set 210:string ${dir}/isolinux/
++chain ${url}pxelinux.0 || goto die
++exit
++
++:bootos_live_desktop
++set img ${os}-${version}-${arch}-Live-Desktop.iso
++goto bootos_live
++
++:bootos_live_kde
++set img ${os}-${version}-${arch}-Live-KDE.iso
++goto bootos_live
++
++:bootos_live
++set dir ${mirror}/fedora/linux/releases/${version}/Live/${arch}
++set next-server 158.197.16.70
++set params ip=${ip}:${next-server}:${gateway}:${netmask} BOOTIF=${mac}
++echo params: ${params}
++echo WARNING: This does not really works!
++kernel ${url}memdisk iso raw ${params} || goto die
++initrd ${dir}/${img} || goto die
++boot
++exit
++
++:freedos
++chain dos.ipxe
+
+From 20cb1df963722f394c4c1cc4b0c93b4710b620c8 Mon Sep 17 00:00:00 2001
+From: ondrejj <ondrejj@c21728ea-8e09-0410-9ecb-e72249775932>
+Date: Thu, 12 Apr 2012 17:15:15 +0000
+Subject: [PATCH] update
+
+git-svn-id: file:///var/svn/pxeboot@2938 c21728ea-8e09-0410-9ecb-e72249775932
+---
+ ipxe/Makefile    |  28 --------
+ ipxe/dos.ipxe    |  43 -----------
+ ipxe/link.ipxe   |  26 -------
+ ipxe/script.ipxe | 215 -------------------------------------------------------
+ 4 files changed, 312 deletions(-)
+
+diff --git a/ipxe/Makefile b/ipxe/Makefile
+deleted file mode 100644
+index deb15b17c583cc31f4e4b81f784bf7cdc13fa557..0000000000000000000000000000000000000000
+--- a/ipxe/Makefile
++++ /dev/null
+@@ -1,28 +0,0 @@
+-IPXEDIR=../../../c/ipxe/src
+-TARGETS=bin/ipxe.lkrn bin/ipxe.pxe bin/ipxe.iso
+-MEM=768
+-NETMODEL=virtio
+-NET=-net nic,model=$(NETMODEL) -net user
+-
+-all:	compile copy
+-
+-compile:
+-	make -j1 -C $(IPXEDIR) EMBEDDED_IMAGE=`pwd`/link.ipxe \
+-		TRUST=`pwd`/upjs.pem,`pwd`/terena.pem \
+-		$(TARGETS)
+-
+-copy:
+-	for i in $(TARGETS); do \
+-		cp -a $(IPXEDIR)/$$i .; \
+-	done
+-
+-test:	all
+-	../rsync
+-	qemu-kvm -m $(MEM) -kernel $(IPXEDIR)/bin/ipxe.lkrn $(NET) $(ARGS)
+-
+-freedos:
+-	zip /tmp/fd11live.img.zip fd11live.img
+-	rsync -avP ./fd11live.img /tmp/fd11live.img.zip \
+-		mirror@ftp:/home/ftp/pub/mirrors/freedos/1.1/
+-	gzip -c1 fd11live.img | ssh mirror@ftp \
+-		dd of=/home/ftp/pub/mirrors/freedos/1.1/fd11live.img.gz
+diff --git a/ipxe/dos.ipxe b/ipxe/dos.ipxe
+deleted file mode 100644
+index 4836e88e73b5037cb3a06cc47a309813b10e95be..0000000000000000000000000000000000000000
+--- a/ipxe/dos.ipxe
++++ /dev/null
+@@ -1,43 +0,0 @@
+-#!ipxe
+-
+-:dos_menu
+-menu FreeDOS
+-item --key i install FreeDOS 1.1 src (installation iso) [i]
+-item --key l live FreeDOS 1.1 Live [l]
+-item --key c custom_iso Boot custom CDROM ISO image [c]
+-item --key d custom_img Boot custom FD/HDD image [d]
+-item --key u ubcd UBCD - Ultimate boot CD [u]
+-choose value || goto dos_menu
+-goto boot_dos_${value}
+-
+-:boot_dos_install
+-set dir ${mirror}/mirrors/freedos/1.1
+-kernel ${url}memdisk iso ${params} || goto die
+-initrd ${dir}/fd11src.iso || goto die
+-boot
+-
+-:boot_dos_live
+-set dir ${mirror}/mirrors/freedos/1.1
+-kernel ${url}memdisk raw keeppxe ${params} || goto die
+-initrd ${dir}/fd11live.img.zip || goto die
+-boot
+-
+-:boot_dos_custom_iso
+-kernel ${url}memdisk iso ${params} || goto die
+-goto enter_path
+-
+-:boot_dos_custom_img
+-kernel ${url}memdisk ${params} || goto die
+-goto enter_path
+-
+-:enter_path
+-echo -n Enter image URL: ${}
+-read imgurl
+-isset ${imgurl} || goto dos_menu
+-initrd ${imgurl} || goto enter_path
+-boot
+-
+-:boot_dos_ubcd
+-kernel ${url}memdisk iso keeppxe ${params} || goto die
+-initrd http://www.salstar.sk/pxe/test/ubcd511.iso || goto die
+-boot
+diff --git a/ipxe/link.ipxe b/ipxe/link.ipxe
+deleted file mode 100644
+index 908f83357c3d54e19f0ac385bb433c1382b6cd07..0000000000000000000000000000000000000000
+--- a/ipxe/link.ipxe
++++ /dev/null
+@@ -1,26 +0,0 @@
+-#!ipxe
+-
+-:start
+-dhcp || goto shell
+-
+-:boot
+-set base https://www.salstar.sk/pxe/ipxe/
+-chain ${base}${mac} ||
+-chain ${base}${ip} ||
+-chain ${base}script.ipxe ||
+-echo Internal script failed!
+-shell
+-goto start
+-
+-:shell
+-echo If you need to boot in specific vlan, type: goto vlan
+-echo If you need to boot again, type: exit
+-shell
+-goto start
+-
+-:vlan
+-echo -n Enter VLAN #: ${}
+-read vlan
+-vcreate --tag ${vlan} net0
+-dhcp net0-${vlan}
+-goto boot
+diff --git a/ipxe/script.ipxe b/ipxe/script.ipxe
+deleted file mode 100644
+index 245f48e55bf8b0e446080a34032be492a2aca4e2..0000000000000000000000000000000000000000
+--- a/ipxe/script.ipxe
++++ /dev/null
+@@ -1,215 +0,0 @@
+-#!ipxe
+-
+-set url https://www.salstar.sk/pxe/
+-set mirror http://ftp.upjs.sk/pub
+-#set url tftp://158.197.16.70/
+-isset ${admin_ip} || set admin_ip 158.197.240.41
+-isset ${bits} || set bits 64
+-isset ${arch} || set arch x86_64
+-set cls:hex 1b:5b:4a  # ANSI clear screen sequence - "^[[J"
+-isset ${menu} && goto ${menu} ||
+-
+-isset ${ip} || dhcp || echo DHCP failed
+-
+-:main_menu
+-clear version
+-set space:hex 20:20
+-menu SAL's iPXE MENU
+-item --gap Default:
+-item --key l local ${space} Boot local hdd [l]
+-item --gap Linux systems:
+-item --key f fedora ${space} Fedora ${arch} [f]
+-item --key c centos ${space} CentOS ${arch} [c]
+-item --key d freedos ${space} FreeDOS [d]
+-item --gap Options:
+-iseq ${menu} changebits && set default --default || set default --
+-item --key a ${default} changebits ${space} Architecture: ${arch} (${bits}bit) [a]
+-iseq ${menu} params_menu && set default --default || set default --
+-item --key 0x09 ${default} params_menu ${space} Kernel parameters: ${params}
+-item --gap Tools:
+-item --key x pxelinux ${space} Chainload pxelinux menu [x]
+-item --key h hdt ${space} Hardware detection tool [h]
+-item --key p pmagic ${space} Parted Magic [p]
+-item --key m memtest ${space} MemTest86+ [m]
+-item --key s shell ${space} iPXE shell [s]
+-isset ${menu} && set timeout 0 || set timeout 60000
+-choose --timeout ${timeout} menu || goto local
+-echo ${cls}
+-goto ${menu}
+-
+-:local
+-exit
+-
+-:pxelinux
+-echo Loading pxelinux ...
+-set 209:string pxelinux.cfg/default
+-set 210:string ${url}
+-chain ${url}pxelinux.0 || goto die
+-
+-:hdt
+-set 209:string pxelinux.cfg/hdt
+-set 210:string ${url}
+-chain ${url}pxelinux.0 || goto die
+-
+-:pmagic
+-initrd ${url}pmagic/initrd.img || goto die
+-chain ${url}pmagic/bzImage edd=off load_ramdisk=1 prompt_ramdisk=0 rw vga=normal loglevel=9 max_loop=256 || goto die
+-
+-:memtest
+-set 209:string pxelinux.cfg/memtest
+-set 210:string ${url}
+-chain ${url}pxelinux.0 || goto die
+-chain ${url}memtest/memtest || goto die
+-
+-:shell
+-echo Type "exit" to return to menu.
+-shell
+-goto main_menu
+-
+-:die
+-echo Error occured, press any key ...
+-prompt --timeout 60000
+-exit
+-
+-:changebits
+-iseq ${bits} 32 && set bits 64 || set bits 32
+-iseq ${bits} 32 && set arch i386 || set arch x86_64
+-goto main_menu
+-
+-:params_menu
+-menu Kernel parameters
+-item --gap Current: ${params}
+-item --gap
+-item --key x exit Return to main menu [x]
+-item --key s set Set parameters [s]
+-item --key v vnc VNC installation [v]
+-item --key 0 ttyS0 Serial console ttyS0 [0]
+-item --key 1 ttyS1 Serial cosnole ttyS1 [1]
+-choose kp || goto main_menu
+-echo ${cls}
+-goto params_${kp}
+-
+-# Kernel parameters
+-:params_set
+-echo -n Enter parameters: ${} && read params
+-goto params_menu
+-
+-:params_vnc
+-set params ${params} vnc vncconnect=${admin_ip}:5500
+-goto params_menu
+-
+-:params_ttyS0
+-set params ${params} console=ttyS0
+-goto params_menu
+-
+-:params_ttyS1
+-set params ${params} console=ttyS1
+-goto params_menu
+-
+-:params_exit
+-goto main_menu
+-
+-# OS
+-:fedora
+-set os Fedora
+-menu Fedora
+-item --key 6 16 ${os} 16 ${arch} [6]
+-item --key 5 15 ${os} 15 ${arch} [5]
+-item --key a 17-Alpha ${os} 17-Aplha ${arch} [a]
+-item --key d development ${os} 17 (development) ${arch} [d]
+-isset ${version} || choose version || goto main_menu
+-echo ${cls}
+-goto fedora_${version} ||
+-set dir ${mirror}/fedora/linux/releases/${version}/${os}/${arch}/os
+-:fedora_setvars
+-set osks http://www.salstar.sk/ks/auto
+-goto boottype
+-
+-:fedora_17-Alpha
+-set dir ${mirror}/fedora/linux/releases/test/${version}/${os}/${arch}/os
+-set params root=live:${dir}/LiveOS/squashfs.img ${params}
+-goto fedora_setvars
+-
+-:fedora_development
+-set dir ${mirror}/fedora/linux/development/17/${arch}/os
+-set params root=live:${dir}/LiveOS/squashfs.img ${params}
+-goto fedora_setvars
+-
+-:fedora_live
+-set dir ${mirror}/fedora/linux/releases/${version}/Live/${arch}
+-set img ${os}-${version}-${arch}-Live-Desktop.iso
+-prompt
+-exit
+-
+-:centos
+-set os CentOS
+-menu CentOS
+-item --key 6 6 ${os} 6 ${arch} [6]
+-item --key 5 5 ${os} 5 ${arch} [5]
+-isset ${version} || choose version || goto main_menu
+-echo ${cls}
+-set dir ${mirror}/centos/${version}/os/${arch}
+-set osks http://www.salstar.sk/ks/centos${version}
+-goto boottype
+-
+-:boottype
+-set ova ${os} ${version} ${arch}
+-menu ${os} boot type
+-item normal ${ova}
+-item --key k ks ${ova} kickstart [k]
+-item --key r rescue ${ova} rescue [r]
+-item --key s remote ${ova} rescue with ssh [s]
+-item --key a autopart ${ova} kickstart part=root=4 [a]
+-item --key i isolinux ${ova} direct boot using isolinux [i]
+-item --key l live_desktop ${ova} Live Desktop [l]
+-item --key d live_kde ${ova} Live KDE [d]
+-isset ${bt} || choose bt || goto main_menu
+-echo ${cls}
+-iseq ${bt} ks && set params ksdevice=bootif ks=${osks} ${params} ||
+-iseq ${bt} rescue && set params rescue ${params} ||
+-iseq ${bt} remote && set params ksdevice=bootif ks=http://www.salstar.sk/ks/rescue ${params} ||
+-iseq ${bt} autopart && set params ksdevice=bootif ks=${osks} root=part=4 ${params} ||
+-goto bootos_${bt} ||
+-goto bootos_images
+-
+-:bootos_images
+-echo Loading from ${dir}/isolinux/
+-echo   method=${dir}
+-echo   ${kickstart} ${rescue} ${params}
+-#set next-server 158.197.16.70
+-# load vmlinuz and initrd
+-kernel ${dir}/isolinux/vmlinuz nodhcp method=${dir} ${params} || goto die
+-initrd ${dir}/isolinux/initrd.img || goto die
+-imgstat
+-isset ${debug} && prompt ||
+-boot
+-exit
+-
+-:bootos_isolinux
+-echo Loading isolinux from ${dir}/isolinux/
+-set 209:string isolinux.cfg
+-set 210:string ${dir}/isolinux/
+-chain ${url}pxelinux.0 || goto die
+-exit
+-
+-:bootos_live_desktop
+-set img ${os}-${version}-${arch}-Live-Desktop.iso
+-goto bootos_live
+-
+-:bootos_live_kde
+-set img ${os}-${version}-${arch}-Live-KDE.iso
+-goto bootos_live
+-
+-:bootos_live
+-set dir ${mirror}/fedora/linux/releases/${version}/Live/${arch}
+-set next-server 158.197.16.70
+-set params ip=${ip}:${next-server}:${gateway}:${netmask} BOOTIF=${mac}
+-echo params: ${params}
+-echo WARNING: This does not really works!
+-kernel ${url}memdisk iso raw ${params} || goto die
+-initrd ${dir}/${img} || goto die
+-boot
+-exit
+-
+-:freedos
+-chain dos.ipxe
+
+From afa5c4608abf967af3c854032043308cda7fece7 Mon Sep 17 00:00:00 2001
+From: ondrejj <ondrejj@c21728ea-8e09-0410-9ecb-e72249775932>
+Date: Sat, 14 Apr 2012 20:53:26 +0000
+Subject: [PATCH] update
+
+git-svn-id: file:///var/svn/pxeboot@2940 c21728ea-8e09-0410-9ecb-e72249775932
+---
+ ipxe/README.html | 19 +++++++++++++++++++
+ 1 file changed, 19 insertions(+)
+
+diff --git a/ipxe/README.html b/ipxe/README.html
+new file mode 100644
+index 0000000000000000000000000000000000000000..59f136181b3ff9b6397852fd03fd05fde0c618eb
+--- /dev/null
++++ b/ipxe/README.html
+@@ -0,0 +1,19 @@
++<pre>
++===========================================================
++
++To create a bootable floppy, type
++    cat ipxe.dsk > /dev/fd0
++where /dev/fd0 is your floppy drive.  This will erase any
++data already on the disk.
++
++To create a bootable USB key, type
++    cat ipxe.usb > /dev/sdX
++where /dev/sdX is your USB key, and is *not* a real hard
++disk on your system.  This will erase any data already on
++the USB key.
++
++To create a bootable CD-ROM, burn the ISO image 
++ipxe.iso to a blank CD-ROM.
++
++===========================================================
++</pre>
+
+From ee3e6a1fb4bb49d1d0d4af49e466c9f8694e319f Mon Sep 17 00:00:00 2001
+From: ondrejj <ondrejj@c21728ea-8e09-0410-9ecb-e72249775932>
+Date: Sat, 21 Apr 2012 05:25:13 +0000
+Subject: [PATCH] update
+
+git-svn-id: file:///var/svn/pxeboot@2958 c21728ea-8e09-0410-9ecb-e72249775932
+---
+ ipxe/README.html | 16 +++++++++++++---
+ 1 file changed, 13 insertions(+), 3 deletions(-)
+
+diff --git a/ipxe/README.html b/ipxe/README.html
+index 59f136181b3ff9b6397852fd03fd05fde0c618eb..f13bae0521cefdd2d9d45ad5f6f8039d64c393af 100644
+--- a/ipxe/README.html
++++ b/ipxe/README.html
+@@ -1,5 +1,5 @@
+ <pre>
+-===========================================================
++=======================================================================
+ 
+ To create a bootable floppy, type
+     cat ipxe.dsk > /dev/fd0
+@@ -14,6 +14,16 @@ the USB key.
+ 
+ To create a bootable CD-ROM, burn the ISO image 
+ ipxe.iso to a blank CD-ROM.
+-
+-===========================================================
++=======================================================================
++ISC DHCP daemon:
++        next-server 158.197.16.70;
++        filename "ipxe/ipxe.kpxe";
++=======================================================================
++dnsmasq.conf:
++	dhcp-boot=ipxe/ipxe.kpxe,ftp.upjs.sk,158.197.16.70
++/etc/config/dhcp:
++	# openwrt configuration file
++	config dnsmasq
++	  option dhcp-boot 'ipxe/ipxe.kpxe,ftp.upjs.sk,158.197.16.70'
++=======================================================================
+ </pre>
+
+From 3685b3dfc6145a2f603f4dc4ac40f53256d4701b Mon Sep 17 00:00:00 2001
+From: ondrejj <ondrejj@c21728ea-8e09-0410-9ecb-e72249775932>
+Date: Mon, 7 May 2012 17:34:19 +0000
+Subject: [PATCH] update
+
+git-svn-id: file:///var/svn/pxeboot@2974 c21728ea-8e09-0410-9ecb-e72249775932
+---
+ ipxe/README.html | 13 +++++++++++++
+ 1 file changed, 13 insertions(+)
+
+diff --git a/ipxe/README.html b/ipxe/README.html
+index f13bae0521cefdd2d9d45ad5f6f8039d64c393af..ad7978ffcf438fa648937e767e24ce8fe8138b1b 100644
+--- a/ipxe/README.html
++++ b/ipxe/README.html
+@@ -1,6 +1,14 @@
+ <pre>
+ =======================================================================
+ 
++Files:
++<a href="ipxe.iso">ixpe.iso</a>	- bootable CD/DVD iso image
++<a href="ipxe.usb">ipxe.usb</a>	- bootable USB image
++<a href="ipxe.lkrn">ipxe.lkrn</a>	- load this kernel using GRUB/LILO/...
++*.[k]pxe	- load these using DHCP
++
++=======================================================================
++
+ To create a bootable floppy, type
+     cat ipxe.dsk > /dev/fd0
+ where /dev/fd0 is your floppy drive.  This will erase any
+@@ -14,16 +22,21 @@ the USB key.
+ 
+ To create a bootable CD-ROM, burn the ISO image 
+ ipxe.iso to a blank CD-ROM.
++
+ =======================================================================
++
+ ISC DHCP daemon:
+         next-server 158.197.16.70;
+         filename "ipxe/ipxe.kpxe";
++
+ =======================================================================
++
+ dnsmasq.conf:
+ 	dhcp-boot=ipxe/ipxe.kpxe,ftp.upjs.sk,158.197.16.70
+ /etc/config/dhcp:
+ 	# openwrt configuration file
+ 	config dnsmasq
+ 	  option dhcp-boot 'ipxe/ipxe.kpxe,ftp.upjs.sk,158.197.16.70'
++
+ =======================================================================
+ </pre>
+
+From 9c667753abe990ae3f3507a6d26a3eb5bf9ae26a Mon Sep 17 00:00:00 2001
+From: ondrejj <ondrejj@c21728ea-8e09-0410-9ecb-e72249775932>
+Date: Fri, 28 Sep 2012 14:22:15 +0000
+Subject: [PATCH] update
+
+git-svn-id: file:///var/svn/pxeboot@3089 c21728ea-8e09-0410-9ecb-e72249775932
+---
+ ipxe/README.html | 7 +++++++
+ 1 file changed, 7 insertions(+)
+
+diff --git a/ipxe/README.html b/ipxe/README.html
+index ad7978ffcf438fa648937e767e24ce8fe8138b1b..7b01266eda76b338010fea98fa576ed7a0e30d69 100644
+--- a/ipxe/README.html
++++ b/ipxe/README.html
+@@ -38,5 +38,12 @@ dnsmasq.conf:
+ 	config dnsmasq
+ 	  option dhcp-boot 'ipxe/ipxe.kpxe,ftp.upjs.sk,158.197.16.70'
+ 
++=======================================================================
++
++Quick test using qemu-kvm:
++
++wget http://boot.salstar.sk/ipxe/ipxe.lkrn
++qemu-kvm -net user -net nic,model=virtio -kernel ipxe.lkrn -m 512
++
+ =======================================================================
+ </pre>
+
+From 49d0d78840fc956f565b260d2901f74c745b94a3 Mon Sep 17 00:00:00 2001
+From: ondrejj <ondrejj@c21728ea-8e09-0410-9ecb-e72249775932>
+Date: Fri, 5 Jul 2013 13:09:33 +0000
+Subject: [PATCH] update
+
+git-svn-id: file:///var/svn/pxeboot@3392 c21728ea-8e09-0410-9ecb-e72249775932
+---
+ ipxe/config/colour.h   |  0
+ ipxe/config/console.h  |  8 ++++++++
+ ipxe/config/entropy.h  |  0
+ ipxe/config/general.h  | 28 ++++++++++++++++++++++++++++
+ ipxe/config/ioapi.h    |  0
+ ipxe/config/nap.h      |  0
+ ipxe/config/reboot.h   |  0
+ ipxe/config/sanboot.h  |  0
+ ipxe/config/serial.h   |  2 ++
+ ipxe/config/sideband.h |  0
+ ipxe/config/time.h     |  0
+ ipxe/config/timer.h    |  0
+ ipxe/config/umalloc.h  |  0
+ 13 files changed, 38 insertions(+)
+
+diff --git a/ipxe/config/colour.h b/ipxe/config/colour.h
+new file mode 100644
+index 0000000000000000000000000000000000000000..e69de29bb2d1d6434b8b29ae775ad8c2e48c5391
+diff --git a/ipxe/config/console.h b/ipxe/config/console.h
+new file mode 100644
+index 0000000000000000000000000000000000000000..84867ac28282930d001c611c1b05b621c5e1ba9a
+--- /dev/null
++++ b/ipxe/config/console.h
+@@ -0,0 +1,8 @@
++//#define       CONSOLE_PCBIOS          /* Default BIOS console */
++#define       CONSOLE_SERIAL          /* Serial port */
++//#define       CONSOLE_DIRECT_VGA      /* Direct access to VGA card */
++//#define       CONSOLE_PC_KBD          /* Direct access to PC keyboard */
++//#define       CONSOLE_SYSLOG          /* Syslog console */
++//#define       CONSOLE_SYSLOGS         /* Encrypted syslog console */
++//#define       CONSOLE_VMWARE          /* VMware logfile console */
++//#define       CONSOLE_DEBUGCON        /* Debug port console */
+diff --git a/ipxe/config/entropy.h b/ipxe/config/entropy.h
+new file mode 100644
+index 0000000000000000000000000000000000000000..e69de29bb2d1d6434b8b29ae775ad8c2e48c5391
+diff --git a/ipxe/config/general.h b/ipxe/config/general.h
+new file mode 100644
+index 0000000000000000000000000000000000000000..31d1844a98fb0516257dbe5beccf2d402ad150a9
+--- /dev/null
++++ b/ipxe/config/general.h
+@@ -0,0 +1,28 @@
++// image types
++#define       IMAGE_NBI               /* NBI image support */
++#define       IMAGE_ELF               /* ELF image support */
++#define       IMAGE_MULTIBOOT         /* MultiBoot image support */
++#define       IMAGE_PXE               /* PXE image support */
++#define       IMAGE_SCRIPT            /* iPXE script image support */
++#define       IMAGE_BZIMAGE           /* Linux bzImage image support */
++#define       IMAGE_COMBOOT           /* SYSLINUX COMBOOT image support */
++//#define       IMAGE_EFI               /* EFI image support */
++#define       IMAGE_SDI               /* SDI image support */
++
++// protocols
++#define        DOWNLOAD_PROTO_HTTPS    /* Secure Hypertext Transfer Protocol */
++#define        DOWNLOAD_PROTO_FTP      /* File Transfer Protocol */
++//#define        DOWNLOAD_PROTO_SLAM     /* Scalable Local Area Multicast */
++
++// commands
++#define NSLOOKUP_CMD          /* DNS resolving command */
++#define TIME_CMD              /* Time commands */
++//#define DIGEST_CMD            /* Image crypto digest commands */
++#define LOTEST_CMD            /* Loopback testing commands */
++#define VLAN_CMD              /* VLAN commands */
++#define PXE_CMD               /* PXE commands */
++#define REBOOT_CMD            /* Reboot command */
++#define IMAGE_TRUST_CMD       /* Image trust management commands */
++
++// error messages
++#define  ERRMSG_80211		/* All 802.11 error descriptions (~3.3kb) */
+diff --git a/ipxe/config/ioapi.h b/ipxe/config/ioapi.h
+new file mode 100644
+index 0000000000000000000000000000000000000000..e69de29bb2d1d6434b8b29ae775ad8c2e48c5391
+diff --git a/ipxe/config/nap.h b/ipxe/config/nap.h
+new file mode 100644
+index 0000000000000000000000000000000000000000..e69de29bb2d1d6434b8b29ae775ad8c2e48c5391
+diff --git a/ipxe/config/reboot.h b/ipxe/config/reboot.h
+new file mode 100644
+index 0000000000000000000000000000000000000000..e69de29bb2d1d6434b8b29ae775ad8c2e48c5391
+diff --git a/ipxe/config/sanboot.h b/ipxe/config/sanboot.h
+new file mode 100644
+index 0000000000000000000000000000000000000000..e69de29bb2d1d6434b8b29ae775ad8c2e48c5391
+diff --git a/ipxe/config/serial.h b/ipxe/config/serial.h
+new file mode 100644
+index 0000000000000000000000000000000000000000..47cef79da381fb756f306bee3b8ccb4be6d2352c
+--- /dev/null
++++ b/ipxe/config/serial.h
+@@ -0,0 +1,2 @@
++//#define COMCONSOLE      COM2
++//#define COMSPEED        57600
+diff --git a/ipxe/config/sideband.h b/ipxe/config/sideband.h
+new file mode 100644
+index 0000000000000000000000000000000000000000..e69de29bb2d1d6434b8b29ae775ad8c2e48c5391
+diff --git a/ipxe/config/time.h b/ipxe/config/time.h
+new file mode 100644
+index 0000000000000000000000000000000000000000..e69de29bb2d1d6434b8b29ae775ad8c2e48c5391
+diff --git a/ipxe/config/timer.h b/ipxe/config/timer.h
+new file mode 100644
+index 0000000000000000000000000000000000000000..e69de29bb2d1d6434b8b29ae775ad8c2e48c5391
+diff --git a/ipxe/config/umalloc.h b/ipxe/config/umalloc.h
+new file mode 100644
+index 0000000000000000000000000000000000000000..e69de29bb2d1d6434b8b29ae775ad8c2e48c5391
+
+From 5495264637177d7f4782bb6665d664e809ef6cd9 Mon Sep 17 00:00:00 2001
+From: ondrejj <ondrejj@c21728ea-8e09-0410-9ecb-e72249775932>
+Date: Mon, 5 Aug 2013 12:37:22 +0000
+Subject: [PATCH] update
+
+git-svn-id: file:///var/svn/pxeboot@3399 c21728ea-8e09-0410-9ecb-e72249775932
+---
+ ipxe/config/general.h | 1 +
+ 1 file changed, 1 insertion(+)
+
+diff --git a/ipxe/config/general.h b/ipxe/config/general.h
+index 31d1844a98fb0516257dbe5beccf2d402ad150a9..68098ec74356259b89cd952e96765daaa8dde44e 100644
+--- a/ipxe/config/general.h
++++ b/ipxe/config/general.h
+@@ -22,6 +22,7 @@
+ #define VLAN_CMD              /* VLAN commands */
+ #define PXE_CMD               /* PXE commands */
+ #define REBOOT_CMD            /* Reboot command */
++#define POWEROFF_CMD          /* Power off command */
+ #define IMAGE_TRUST_CMD       /* Image trust management commands */
+ 
+ // error messages
+
+From 774e2ea825db4f9d6916ff89cc957eba32f0043d Mon Sep 17 00:00:00 2001
+From: ondrejj <ondrejj@c21728ea-8e09-0410-9ecb-e72249775932>
+Date: Fri, 9 Aug 2013 19:39:05 +0000
+Subject: [PATCH] update
+
+git-svn-id: file:///var/svn/pxeboot@3403 c21728ea-8e09-0410-9ecb-e72249775932
+---
+ ipxe/config/general.h  | 1 +
+ ipxe/config/settings.h | 0
+ 2 files changed, 1 insertion(+)
+
+diff --git a/ipxe/config/general.h b/ipxe/config/general.h
+index 68098ec74356259b89cd952e96765daaa8dde44e..a22d7ca2bcc4dd5c7144eb6d36408068ccf67119 100644
+--- a/ipxe/config/general.h
++++ b/ipxe/config/general.h
+@@ -24,6 +24,7 @@
+ #define REBOOT_CMD            /* Reboot command */
+ #define POWEROFF_CMD          /* Power off command */
+ #define IMAGE_TRUST_CMD       /* Image trust management commands */
++#define PCI_CMD             /* PCI commands */
+ 
+ // error messages
+ #define  ERRMSG_80211		/* All 802.11 error descriptions (~3.3kb) */
+diff --git a/ipxe/config/settings.h b/ipxe/config/settings.h
+new file mode 100644
+index 0000000000000000000000000000000000000000..e69de29bb2d1d6434b8b29ae775ad8c2e48c5391
+
+From 153576a88eccfc1b6c44d44f3af86e02da40c05f Mon Sep 17 00:00:00 2001
+From: ondrejj <ondrejj@c21728ea-8e09-0410-9ecb-e72249775932>
+Date: Thu, 29 Aug 2013 21:17:42 +0000
+Subject: [PATCH] update
+
+git-svn-id: file:///var/svn/pxeboot@3408 c21728ea-8e09-0410-9ecb-e72249775932
+---
+ ipxe/config/general.h | 1 +
+ 1 file changed, 1 insertion(+)
+
+diff --git a/ipxe/config/general.h b/ipxe/config/general.h
+index a22d7ca2bcc4dd5c7144eb6d36408068ccf67119..ef62e8851566da9809aa1b50f4f378828c7a06bb 100644
+--- a/ipxe/config/general.h
++++ b/ipxe/config/general.h
+@@ -25,6 +25,7 @@
+ #define POWEROFF_CMD          /* Power off command */
+ #define IMAGE_TRUST_CMD       /* Image trust management commands */
+ #define PCI_CMD             /* PCI commands */
++#define PARAM_CMD             /* Form parameter commands */
+ 
+ // error messages
+ #define  ERRMSG_80211		/* All 802.11 error descriptions (~3.3kb) */
+
+From 5841a9e7425820b3c5374f7f8e191171fb2f4ef2 Mon Sep 17 00:00:00 2001
+From: ondrejj <ondrejj@c21728ea-8e09-0410-9ecb-e72249775932>
+Date: Tue, 29 Oct 2013 14:52:52 +0000
+Subject: [PATCH] update
+
+git-svn-id: file:///var/svn/pxeboot@3420 c21728ea-8e09-0410-9ecb-e72249775932
+---
+ ipxe/config/general.h | 2 ++
+ 1 file changed, 2 insertions(+)
+
+diff --git a/ipxe/config/general.h b/ipxe/config/general.h
+index ef62e8851566da9809aa1b50f4f378828c7a06bb..7bd1c5edee33dc4e3f4baadc65f344add2d92916 100644
+--- a/ipxe/config/general.h
++++ b/ipxe/config/general.h
+@@ -26,6 +26,8 @@
+ #define IMAGE_TRUST_CMD       /* Image trust management commands */
+ #define PCI_CMD             /* PCI commands */
+ #define PARAM_CMD             /* Form parameter commands */
++#define NEIGHBOUR_CMD         /* Neighbour management commands */
++#define PING_CMD              /* Ping command */
+ 
+ // error messages
+ #define  ERRMSG_80211		/* All 802.11 error descriptions (~3.3kb) */
+
+From fb69b0a2cde079943251bd04b336e5fea8b991e8 Mon Sep 17 00:00:00 2001
+From: ondrejj <ondrejj@c21728ea-8e09-0410-9ecb-e72249775932>
+Date: Mon, 16 Dec 2013 13:29:45 +0000
+Subject: [PATCH] update
+
+git-svn-id: file:///var/svn/pxeboot@3442 c21728ea-8e09-0410-9ecb-e72249775932
+---
+ ipxe/config/console.h | 1 +
+ ipxe/config/general.h | 1 +
+ 2 files changed, 2 insertions(+)
+
+diff --git a/ipxe/config/console.h b/ipxe/config/console.h
+index 84867ac28282930d001c611c1b05b621c5e1ba9a..56448bbc200223081ae04652d9995de9210bd506 100644
+--- a/ipxe/config/console.h
++++ b/ipxe/config/console.h
+@@ -6,3 +6,4 @@
+ //#define       CONSOLE_SYSLOGS         /* Encrypted syslog console */
+ //#define       CONSOLE_VMWARE          /* VMware logfile console */
+ //#define       CONSOLE_DEBUGCON        /* Debug port console */
++#define       CONSOLE_VESAFB          /* VESA framebuffer console */
+diff --git a/ipxe/config/general.h b/ipxe/config/general.h
+index 7bd1c5edee33dc4e3f4baadc65f344add2d92916..e04f7e725b8e517922a834119239ca2389e20d6f 100644
+--- a/ipxe/config/general.h
++++ b/ipxe/config/general.h
+@@ -28,6 +28,7 @@
+ #define PARAM_CMD             /* Form parameter commands */
+ #define NEIGHBOUR_CMD         /* Neighbour management commands */
+ #define PING_CMD              /* Ping command */
++#define CONSOLE_CMD           /* Console command */
+ 
+ // error messages
+ #define  ERRMSG_80211		/* All 802.11 error descriptions (~3.3kb) */
+
+From 278702edd6f1ffc14a91b75974ba1bb00d3fc5e3 Mon Sep 17 00:00:00 2001
+From: ondrejj <ondrejj@c21728ea-8e09-0410-9ecb-e72249775932>
+Date: Thu, 23 Jan 2014 22:22:06 +0000
+Subject: [PATCH] update
+
+git-svn-id: file:///var/svn/pxeboot@3498 c21728ea-8e09-0410-9ecb-e72249775932
+---
+ ipxe/config/general.h | 2 ++
+ 1 file changed, 2 insertions(+)
+
+diff --git a/ipxe/config/general.h b/ipxe/config/general.h
+index e04f7e725b8e517922a834119239ca2389e20d6f..86f31338a2bb51d94f99a974dfb9e7b070e20d9d 100644
+--- a/ipxe/config/general.h
++++ b/ipxe/config/general.h
+@@ -8,6 +8,8 @@
+ #define       IMAGE_COMBOOT           /* SYSLINUX COMBOOT image support */
+ //#define       IMAGE_EFI               /* EFI image support */
+ #define       IMAGE_SDI               /* SDI image support */
++#define       IMAGE_PNM               /* PNM image support */
++#define       IMAGE_PNG               /* PNG image support */
+ 
+ // protocols
+ #define        DOWNLOAD_PROTO_HTTPS    /* Secure Hypertext Transfer Protocol */
+
+From 0a9411dc999e6117c2267468dbe558ea2120cd19 Mon Sep 17 00:00:00 2001
+From: ondrejj <ondrejj@c21728ea-8e09-0410-9ecb-e72249775932>
+Date: Thu, 6 Mar 2014 15:15:28 +0000
+Subject: [PATCH] update
+
+git-svn-id: file:///var/svn/pxeboot@3556 c21728ea-8e09-0410-9ecb-e72249775932
+---
+ ipxe/config/general.h | 1 +
+ 1 file changed, 1 insertion(+)
+
+diff --git a/ipxe/config/general.h b/ipxe/config/general.h
+index 86f31338a2bb51d94f99a974dfb9e7b070e20d9d..55e26a840299ab3d5add86e4cc900ef6fc26fcb6 100644
+--- a/ipxe/config/general.h
++++ b/ipxe/config/general.h
+@@ -31,6 +31,7 @@
+ #define NEIGHBOUR_CMD         /* Neighbour management commands */
+ #define PING_CMD              /* Ping command */
+ #define CONSOLE_CMD           /* Console command */
++#define IPSTAT_CMD            /* IP statistics commands */
+ 
+ // error messages
+ #define  ERRMSG_80211		/* All 802.11 error descriptions (~3.3kb) */
+
+From 9ae6d66533ea06f8470eb0e67893b1ee505ef42e Mon Sep 17 00:00:00 2001
+From: "Jan ONDREJ (SAL)" <ondrejj(at)salstar.sk>
+Date: Thu, 24 Apr 2014 17:43:39 +0200
+Subject: [PATCH] =?UTF-8?q?autocommit=20=C5=A0t=C2=A024.=C2=A0apr=C3=ADl?=
+ =?UTF-8?q?=C2=A02014,=C2=A017:43:39=C2=A0CEST?=
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+---
+ ipxe/config/crypto.h | 0
+ 1 file changed, 0 insertions(+), 0 deletions(-)
+
+diff --git a/ipxe/config/crypto.h b/ipxe/config/crypto.h
+new file mode 100644
+index 0000000000000000000000000000000000000000..e69de29bb2d1d6434b8b29ae775ad8c2e48c5391
+
+From c8daf115a586590bdc94a16ce7504285907c7a46 Mon Sep 17 00:00:00 2001
+From: "Jan ONDREJ (SAL)" <ondrejj(at)salstar.sk>
+Date: Sun, 4 May 2014 08:53:47 +0200
+Subject: [PATCH] =?UTF-8?q?autocommit=20Ne=C2=A0=204.=C2=A0m=C3=A1j=C2=A02?=
+ =?UTF-8?q?014,=C2=A008:53:44=C2=A0CEST?=
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+---
+ ipxe/config/colour.h   | 0
+ ipxe/config/console.h  | 4 +++-
+ ipxe/config/crypto.h   | 0
+ ipxe/config/entropy.h  | 0
+ ipxe/config/general.h  | 1 +
+ ipxe/config/ioapi.h    | 0
+ ipxe/config/nap.h      | 0
+ ipxe/config/reboot.h   | 0
+ ipxe/config/sanboot.h  | 0
+ ipxe/config/serial.h   | 5 +++--
+ ipxe/config/settings.h | 0
+ ipxe/config/sideband.h | 0
+ ipxe/config/time.h     | 0
+ ipxe/config/timer.h    | 0
+ ipxe/config/umalloc.h  | 0
+ 15 files changed, 7 insertions(+), 3 deletions(-)
+
+diff --git a/ipxe/config/colour.h b/ipxe/config/colour.h
+deleted file mode 100644
+index e69de29bb2d1d6434b8b29ae775ad8c2e48c5391..0000000000000000000000000000000000000000
+diff --git a/ipxe/config/console.h b/ipxe/config/console.h
+index 56448bbc200223081ae04652d9995de9210bd506..96a919961715dd9f657d5689ab31b5601f8ce6a2 100644
+--- a/ipxe/config/console.h
++++ b/ipxe/config/console.h
+@@ -1,5 +1,5 @@
+ //#define       CONSOLE_PCBIOS          /* Default BIOS console */
+-#define       CONSOLE_SERIAL          /* Serial port */
++//#define       CONSOLE_SERIAL          /* Serial port */
+ //#define       CONSOLE_DIRECT_VGA      /* Direct access to VGA card */
+ //#define       CONSOLE_PC_KBD          /* Direct access to PC keyboard */
+ //#define       CONSOLE_SYSLOG          /* Syslog console */
+@@ -7,3 +7,5 @@
+ //#define       CONSOLE_VMWARE          /* VMware logfile console */
+ //#define       CONSOLE_DEBUGCON        /* Debug port console */
+ #define       CONSOLE_VESAFB          /* VESA framebuffer console */
++
++#include <config/local/serial.h>
+diff --git a/ipxe/config/crypto.h b/ipxe/config/crypto.h
+deleted file mode 100644
+index e69de29bb2d1d6434b8b29ae775ad8c2e48c5391..0000000000000000000000000000000000000000
+diff --git a/ipxe/config/entropy.h b/ipxe/config/entropy.h
+deleted file mode 100644
+index e69de29bb2d1d6434b8b29ae775ad8c2e48c5391..0000000000000000000000000000000000000000
+diff --git a/ipxe/config/general.h b/ipxe/config/general.h
+index 55e26a840299ab3d5add86e4cc900ef6fc26fcb6..ad6e3c55faadff89e7c9103ac09de6c7cc5b57ae 100644
+--- a/ipxe/config/general.h
++++ b/ipxe/config/general.h
+@@ -32,6 +32,7 @@
+ #define PING_CMD              /* Ping command */
+ #define CONSOLE_CMD           /* Console command */
+ #define IPSTAT_CMD            /* IP statistics commands */
++#define PROFSTAT_CMD          /* Profiling commands */
+ 
+ // error messages
+ #define  ERRMSG_80211		/* All 802.11 error descriptions (~3.3kb) */
+diff --git a/ipxe/config/ioapi.h b/ipxe/config/ioapi.h
+deleted file mode 100644
+index e69de29bb2d1d6434b8b29ae775ad8c2e48c5391..0000000000000000000000000000000000000000
+diff --git a/ipxe/config/nap.h b/ipxe/config/nap.h
+deleted file mode 100644
+index e69de29bb2d1d6434b8b29ae775ad8c2e48c5391..0000000000000000000000000000000000000000
+diff --git a/ipxe/config/reboot.h b/ipxe/config/reboot.h
+deleted file mode 100644
+index e69de29bb2d1d6434b8b29ae775ad8c2e48c5391..0000000000000000000000000000000000000000
+diff --git a/ipxe/config/sanboot.h b/ipxe/config/sanboot.h
+deleted file mode 100644
+index e69de29bb2d1d6434b8b29ae775ad8c2e48c5391..0000000000000000000000000000000000000000
+diff --git a/ipxe/config/serial.h b/ipxe/config/serial.h
+index 47cef79da381fb756f306bee3b8ccb4be6d2352c..6042c20dfd2e4f22016206e059bf2240c9448c94 100644
+--- a/ipxe/config/serial.h
++++ b/ipxe/config/serial.h
+@@ -1,2 +1,3 @@
+-//#define COMCONSOLE      COM2
+-//#define COMSPEED        57600
++#define CONSOLE_SERIAL /* Serial port */
++//#define COMCONSOLE COM2
++//#define COMSPEED 57600
+diff --git a/ipxe/config/settings.h b/ipxe/config/settings.h
+deleted file mode 100644
+index e69de29bb2d1d6434b8b29ae775ad8c2e48c5391..0000000000000000000000000000000000000000
+diff --git a/ipxe/config/sideband.h b/ipxe/config/sideband.h
+deleted file mode 100644
+index e69de29bb2d1d6434b8b29ae775ad8c2e48c5391..0000000000000000000000000000000000000000
+diff --git a/ipxe/config/time.h b/ipxe/config/time.h
+deleted file mode 100644
+index e69de29bb2d1d6434b8b29ae775ad8c2e48c5391..0000000000000000000000000000000000000000
+diff --git a/ipxe/config/timer.h b/ipxe/config/timer.h
+deleted file mode 100644
+index e69de29bb2d1d6434b8b29ae775ad8c2e48c5391..0000000000000000000000000000000000000000
+diff --git a/ipxe/config/umalloc.h b/ipxe/config/umalloc.h
+deleted file mode 100644
+index e69de29bb2d1d6434b8b29ae775ad8c2e48c5391..0000000000000000000000000000000000000000
+
+From ea9658cc2f71bd743bbd139dc3b53282576c53bd Mon Sep 17 00:00:00 2001
+From: "Jan ONDREJ (SAL)" <ondrejj(at)salstar.sk>
+Date: Tue, 19 Aug 2014 18:19:50 +0200
+Subject: [PATCH] Added centos7. Added custom configuration. Sourceforge
+ caching on ftp.upjs.sk.
+
+---
+ ipxe/config/console.h | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/ipxe/config/console.h b/ipxe/config/console.h
+index 96a919961715dd9f657d5689ab31b5601f8ce6a2..da49e0c4e5468119224f187548dda46d9d5c589d 100644
+--- a/ipxe/config/console.h
++++ b/ipxe/config/console.h
+@@ -1,5 +1,5 @@
+ //#define       CONSOLE_PCBIOS          /* Default BIOS console */
+-//#define       CONSOLE_SERIAL          /* Serial port */
++#define       CONSOLE_SERIAL          /* Serial port */
+ //#define       CONSOLE_DIRECT_VGA      /* Direct access to VGA card */
+ //#define       CONSOLE_PC_KBD          /* Direct access to PC keyboard */
+ //#define       CONSOLE_SYSLOG          /* Syslog console */
+
+From de05a559ce1ecf737628d65cbc3ae41af100bf67 Mon Sep 17 00:00:00 2001
+From: "Jan ONDREJ (SAL)" <ondrejj(at)salstar.sk>
+Date: Sat, 27 Sep 2014 14:41:26 +0200
+Subject: [PATCH] Serial console fixes.
+
+---
+ ipxe/config/console.h |  5 +++--
+ ipxe/config/general.h | 30 ++++++++++++++++--------------
+ ipxe/config/serial.h  |  3 ---
+ 3 files changed, 19 insertions(+), 19 deletions(-)
+
+diff --git a/ipxe/config/console.h b/ipxe/config/console.h
+index da49e0c4e5468119224f187548dda46d9d5c589d..100d490dc43daff3b4f9aad12bbfbb7de01fd48f 100644
+--- a/ipxe/config/console.h
++++ b/ipxe/config/console.h
+@@ -1,5 +1,5 @@
+ //#define       CONSOLE_PCBIOS          /* Default BIOS console */
+-#define       CONSOLE_SERIAL          /* Serial port */
++//#define       CONSOLE_SERIAL          /* Serial port */
+ //#define       CONSOLE_DIRECT_VGA      /* Direct access to VGA card */
+ //#define       CONSOLE_PC_KBD          /* Direct access to PC keyboard */
+ //#define       CONSOLE_SYSLOG          /* Syslog console */
+@@ -8,4 +8,5 @@
+ //#define       CONSOLE_DEBUGCON        /* Debug port console */
+ #define       CONSOLE_VESAFB          /* VESA framebuffer console */
+ 
+-#include <config/local/serial.h>
++//#define COMCONSOLE COM2
++//#define COMSPEED 57600
+diff --git a/ipxe/config/general.h b/ipxe/config/general.h
+index ad6e3c55faadff89e7c9103ac09de6c7cc5b57ae..c3f92e60c9d7088c29dcfb4721f8131e58b96cbe 100644
+--- a/ipxe/config/general.h
++++ b/ipxe/config/general.h
+@@ -1,20 +1,22 @@
+ // image types
+-#define       IMAGE_NBI               /* NBI image support */
+-#define       IMAGE_ELF               /* ELF image support */
+-#define       IMAGE_MULTIBOOT         /* MultiBoot image support */
+-#define       IMAGE_PXE               /* PXE image support */
+-#define       IMAGE_SCRIPT            /* iPXE script image support */
+-#define       IMAGE_BZIMAGE           /* Linux bzImage image support */
+-#define       IMAGE_COMBOOT           /* SYSLINUX COMBOOT image support */
+-//#define       IMAGE_EFI               /* EFI image support */
+-#define       IMAGE_SDI               /* SDI image support */
+-#define       IMAGE_PNM               /* PNM image support */
+-#define       IMAGE_PNG               /* PNG image support */
++#define IMAGE_NBI               /* NBI image support */
++#define IMAGE_ELF               /* ELF image support */
++#define IMAGE_MULTIBOOT         /* MultiBoot image support */
++#define IMAGE_PXE               /* PXE image support */
++#define IMAGE_SCRIPT            /* iPXE script image support */
++#define IMAGE_BZIMAGE           /* Linux bzImage image support */
++#define IMAGE_COMBOOT           /* SYSLINUX COMBOOT image support */
++//#define IMAGE_EFI               /* EFI image support */
++#define IMAGE_SDI               /* SDI image support */
++#define IMAGE_PNM               /* PNM image support */
++#define IMAGE_PNG               /* PNG image support */
+ 
+ // protocols
+-#define        DOWNLOAD_PROTO_HTTPS    /* Secure Hypertext Transfer Protocol */
+-#define        DOWNLOAD_PROTO_FTP      /* File Transfer Protocol */
+-//#define        DOWNLOAD_PROTO_SLAM     /* Scalable Local Area Multicast */
++#define NET_PROTO_IPV4          /* IPv4 protocol */
++#define NET_PROTO_IPV6          /* IPv6 protocol */
++#define DOWNLOAD_PROTO_HTTPS    /* Secure Hypertext Transfer Protocol */
++#define DOWNLOAD_PROTO_FTP      /* File Transfer Protocol */
++//#define DOWNLOAD_PROTO_SLAM     /* Scalable Local Area Multicast */
+ 
+ // commands
+ #define NSLOOKUP_CMD          /* DNS resolving command */
+diff --git a/ipxe/config/serial.h b/ipxe/config/serial.h
+deleted file mode 100644
+index 6042c20dfd2e4f22016206e059bf2240c9448c94..0000000000000000000000000000000000000000
+--- a/ipxe/config/serial.h
++++ /dev/null
+@@ -1,3 +0,0 @@
+-#define CONSOLE_SERIAL /* Serial port */
+-//#define COMCONSOLE COM2
+-//#define COMSPEED 57600
+
+From 8a1f1f2cbb129ebf8c05a59b05f22ee4418cfce0 Mon Sep 17 00:00:00 2001
+From: "Jan ONDREJ (SAL)" <ondrejj(at)salstar.sk>
+Date: Sat, 27 Sep 2014 14:42:45 +0200
+Subject: [PATCH] Config files for serial console.
+
+---
+ ipxe/config/com1/colour.h   | 0
+ ipxe/config/com1/console.h  | 1 +
+ ipxe/config/com1/crypto.h   | 0
+ ipxe/config/com1/general.h  | 0
+ ipxe/config/com1/serial.h   | 0
+ ipxe/config/com1/settings.h | 0
+ ipxe/config/com1/sideband.h | 0
+ ipxe/config/com2/colour.h   | 0
+ ipxe/config/com2/console.h  | 1 +
+ ipxe/config/com2/crypto.h   | 0
+ ipxe/config/com2/general.h  | 0
+ ipxe/config/com2/serial.h   | 3 +++
+ ipxe/config/com2/settings.h | 0
+ ipxe/config/com2/sideband.h | 0
+ ipxe/config/serial.h        | 0
+ 15 files changed, 5 insertions(+)
+
+diff --git a/ipxe/config/com1/colour.h b/ipxe/config/com1/colour.h
+new file mode 100644
+index 0000000000000000000000000000000000000000..e69de29bb2d1d6434b8b29ae775ad8c2e48c5391
+diff --git a/ipxe/config/com1/console.h b/ipxe/config/com1/console.h
+new file mode 100644
+index 0000000000000000000000000000000000000000..cc7df8f7ee706b3cf0639beaa46fa5f9df859f67
+--- /dev/null
++++ b/ipxe/config/com1/console.h
+@@ -0,0 +1 @@
++#define       CONSOLE_SERIAL          /* Serial port */
+diff --git a/ipxe/config/com1/crypto.h b/ipxe/config/com1/crypto.h
+new file mode 100644
+index 0000000000000000000000000000000000000000..e69de29bb2d1d6434b8b29ae775ad8c2e48c5391
+diff --git a/ipxe/config/com1/general.h b/ipxe/config/com1/general.h
+new file mode 100644
+index 0000000000000000000000000000000000000000..e69de29bb2d1d6434b8b29ae775ad8c2e48c5391
+diff --git a/ipxe/config/com1/serial.h b/ipxe/config/com1/serial.h
+new file mode 100644
+index 0000000000000000000000000000000000000000..e69de29bb2d1d6434b8b29ae775ad8c2e48c5391
+diff --git a/ipxe/config/com1/settings.h b/ipxe/config/com1/settings.h
+new file mode 100644
+index 0000000000000000000000000000000000000000..e69de29bb2d1d6434b8b29ae775ad8c2e48c5391
+diff --git a/ipxe/config/com1/sideband.h b/ipxe/config/com1/sideband.h
+new file mode 100644
+index 0000000000000000000000000000000000000000..e69de29bb2d1d6434b8b29ae775ad8c2e48c5391
+diff --git a/ipxe/config/com2/colour.h b/ipxe/config/com2/colour.h
+new file mode 100644
+index 0000000000000000000000000000000000000000..e69de29bb2d1d6434b8b29ae775ad8c2e48c5391
+diff --git a/ipxe/config/com2/console.h b/ipxe/config/com2/console.h
+new file mode 100644
+index 0000000000000000000000000000000000000000..cc7df8f7ee706b3cf0639beaa46fa5f9df859f67
+--- /dev/null
++++ b/ipxe/config/com2/console.h
+@@ -0,0 +1 @@
++#define       CONSOLE_SERIAL          /* Serial port */
+diff --git a/ipxe/config/com2/crypto.h b/ipxe/config/com2/crypto.h
+new file mode 100644
+index 0000000000000000000000000000000000000000..e69de29bb2d1d6434b8b29ae775ad8c2e48c5391
+diff --git a/ipxe/config/com2/general.h b/ipxe/config/com2/general.h
+new file mode 100644
+index 0000000000000000000000000000000000000000..e69de29bb2d1d6434b8b29ae775ad8c2e48c5391
+diff --git a/ipxe/config/com2/serial.h b/ipxe/config/com2/serial.h
+new file mode 100644
+index 0000000000000000000000000000000000000000..f6a455c94ae4649fc444d4c513c04619bbd4ef16
+--- /dev/null
++++ b/ipxe/config/com2/serial.h
+@@ -0,0 +1,3 @@
++#undef COMCONSOLE
++#define COMCONSOLE      COM2
++//#define COMSPEED 57600
+diff --git a/ipxe/config/com2/settings.h b/ipxe/config/com2/settings.h
+new file mode 100644
+index 0000000000000000000000000000000000000000..e69de29bb2d1d6434b8b29ae775ad8c2e48c5391
+diff --git a/ipxe/config/com2/sideband.h b/ipxe/config/com2/sideband.h
+new file mode 100644
+index 0000000000000000000000000000000000000000..e69de29bb2d1d6434b8b29ae775ad8c2e48c5391
+diff --git a/ipxe/config/serial.h b/ipxe/config/serial.h
+new file mode 100644
+index 0000000000000000000000000000000000000000..e69de29bb2d1d6434b8b29ae775ad8c2e48c5391
+
+From 3f054fd6bcb4e204ebbb32bfdfe76d025c9a30c9 Mon Sep 17 00:00:00 2001
+From: "Jan ONDREJ (SAL)" <ondrejj(at)salstar.sk>
+Date: Sat, 30 May 2015 20:10:17 +0200
+Subject: [PATCH] Added new ipxe config files.
+
+---
+ ipxe/config/com1/usb.h | 0
+ ipxe/config/com2/usb.h | 0
+ 2 files changed, 0 insertions(+), 0 deletions(-)
+
+diff --git a/ipxe/config/com1/usb.h b/ipxe/config/com1/usb.h
+new file mode 100644
+index 0000000000000000000000000000000000000000..e69de29bb2d1d6434b8b29ae775ad8c2e48c5391
+diff --git a/ipxe/config/com2/usb.h b/ipxe/config/com2/usb.h
+new file mode 100644
+index 0000000000000000000000000000000000000000..e69de29bb2d1d6434b8b29ae775ad8c2e48c5391
+
+From 43dcccddcc79c73cad1707756f6fa06189a6bcee Mon Sep 17 00:00:00 2001
+From: "Jan ONDREJ (SAL)" <ondrejj(at)salstar.sk>
+Date: Wed, 22 Jun 2016 08:45:00 +0200
+Subject: [PATCH] Fedora 24 added. Fedora 24 requires more than 1 GB of RAM.
+ GParted 0.26 added. Use ntp client.
+
+---
+ ipxe/config/general.h | 1 +
+ 1 file changed, 1 insertion(+)
+
+diff --git a/ipxe/config/general.h b/ipxe/config/general.h
+index c3f92e60c9d7088c29dcfb4721f8131e58b96cbe..88f4a816883323b90e47462e2d8a50793c55b1b3 100644
+--- a/ipxe/config/general.h
++++ b/ipxe/config/general.h
+@@ -35,6 +35,7 @@
+ #define CONSOLE_CMD           /* Console command */
+ #define IPSTAT_CMD            /* IP statistics commands */
+ #define PROFSTAT_CMD          /* Profiling commands */
++#define NTP_CMD               /* NTP commands */
+ 
+ // error messages
+ #define  ERRMSG_80211		/* All 802.11 error descriptions (~3.3kb) */
+
+From 98038e4362e8e19cb8af5dcde5634d7f793a5a2a Mon Sep 17 00:00:00 2001
+From: "Jan ONDREJ (SAL)" <ondrejj(at)salstar.sk>
+Date: Tue, 11 Oct 2016 19:00:25 +0200
+Subject: [PATCH] EFI support testing.
+
+---
+ ipxe/config/general.h | 28 +++++++++++++++++-----------
+ 1 file changed, 17 insertions(+), 11 deletions(-)
+
+diff --git a/ipxe/config/general.h b/ipxe/config/general.h
+index 88f4a816883323b90e47462e2d8a50793c55b1b3..5ceec3014e95287cace243229b057dc20aceb7d3 100644
+--- a/ipxe/config/general.h
++++ b/ipxe/config/general.h
+@@ -1,15 +1,17 @@
+ // image types
+-#define IMAGE_NBI               /* NBI image support */
+-#define IMAGE_ELF               /* ELF image support */
+-#define IMAGE_MULTIBOOT         /* MultiBoot image support */
+-#define IMAGE_PXE               /* PXE image support */
+-#define IMAGE_SCRIPT            /* iPXE script image support */
+-#define IMAGE_BZIMAGE           /* Linux bzImage image support */
+-#define IMAGE_COMBOOT           /* SYSLINUX COMBOOT image support */
++//#ifndef CONSOLE_EFI
++//#define IMAGE_NBI               /* NBI image support */
++//#define IMAGE_ELF               /* ELF image support */
++//#define IMAGE_MULTIBOOT         /* MultiBoot image support */
++//#define IMAGE_PXE               /* PXE image support */
++//#endif
++//#define IMAGE_SCRIPT            /* iPXE script image support */
++//#ifndef CONSOLE_EFI
++//#define IMAGE_BZIMAGE           /* Linux bzImage image support */
++//#define IMAGE_COMBOOT           /* SYSLINUX COMBOOT image support */
++//#endif
+ //#define IMAGE_EFI               /* EFI image support */
+-#define IMAGE_SDI               /* SDI image support */
+-#define IMAGE_PNM               /* PNM image support */
+-#define IMAGE_PNG               /* PNG image support */
++//#define IMAGE_SDI               /* SDI image support */
+ 
+ // protocols
+ #define NET_PROTO_IPV4          /* IPv4 protocol */
+@@ -24,7 +26,10 @@
+ //#define DIGEST_CMD            /* Image crypto digest commands */
+ #define LOTEST_CMD            /* Loopback testing commands */
+ #define VLAN_CMD              /* VLAN commands */
+-#define PXE_CMD               /* PXE commands */
++// incompatible with efi build
++//#ifndef CONSOLE_EFI
++//#define PXE_CMD               /* PXE commands */
++//#endif
+ #define REBOOT_CMD            /* Reboot command */
+ #define POWEROFF_CMD          /* Power off command */
+ #define IMAGE_TRUST_CMD       /* Image trust management commands */
+@@ -36,6 +41,7 @@
+ #define IPSTAT_CMD            /* IP statistics commands */
+ #define PROFSTAT_CMD          /* Profiling commands */
+ #define NTP_CMD               /* NTP commands */
++#define CERT_CMD              /* Certificate management commands */
+ 
+ // error messages
+ #define  ERRMSG_80211		/* All 802.11 error descriptions (~3.3kb) */
+
+From 1d57910aace260477eeae02d847894472602e182 Mon Sep 17 00:00:00 2001
+From: "Jan ONDREJ (SAL)" <ondrejj(at)salstar.sk>
+Date: Wed, 9 Nov 2016 07:43:18 +0100
+Subject: [PATCH] The Tivoli VMM workaround causes KVM and some other hosts to
+ crash. Disabled in this commit.
+
+---
+ ipxe/config/general.h | 3 +++
+ 1 file changed, 3 insertions(+)
+
+diff --git a/ipxe/config/general.h b/ipxe/config/general.h
+index 5ceec3014e95287cace243229b057dc20aceb7d3..880a07070171f4dc9f09009840ef2653ebfb3ecc 100644
+--- a/ipxe/config/general.h
++++ b/ipxe/config/general.h
+@@ -45,3 +45,6 @@
+ 
+ // error messages
+ #define  ERRMSG_80211		/* All 802.11 error descriptions (~3.3kb) */
++
++// The Tivoli VMM workaround causes KVM and some other hosts to crash.
++#undef TIVOLI_VMM_WORKAROUND
+
+From cc7ae2e2988184649538610d5ef651d98d2ab7e6 Mon Sep 17 00:00:00 2001
+From: "Jan ONDREJ (SAL)" <ondrejj(at)salstar.sk>
+Date: Sun, 7 Jul 2019 08:28:57 +0200
+Subject: [PATCH] Prepare for runtime serial configuration patch.
+
+---
+ ipxe/config/com1/serial.h | 3 +++
+ 1 file changed, 3 insertions(+)
+
+diff --git a/ipxe/config/com1/serial.h b/ipxe/config/com1/serial.h
+index e69de29bb2d1d6434b8b29ae775ad8c2e48c5391..35a6a58d1e1cd57f23eccb4a437d39bd9f6865f7 100644
+--- a/ipxe/config/com1/serial.h
++++ b/ipxe/config/com1/serial.h
+@@ -0,0 +1,3 @@
++#undef COMCONSOLE
++#define COMCONSOLE      COM1
++//#define COMSPEED 57600
+
+From 33294a6537498ea4514b258b6db474c11c0c8871 Mon Sep 17 00:00:00 2001
+From: "Jan ONDREJ (SAL)" <ondrejj(at)salstar.sk>
+Date: Tue, 26 Jan 2021 11:42:22 +0100
+Subject: [PATCH] Combined iso (pcbios, efi and arm). Added default CA-trust
+ from Fedora. Gparted version updates.
+
+---
+ ipxe/startup.nsh | 1 +
+ 1 file changed, 1 insertion(+)
+
+diff --git a/ipxe/startup.nsh b/ipxe/startup.nsh
+new file mode 100644
+index 0000000000000000000000000000000000000000..96926f2d1ce98471a443d08d1ec53888f09377a4
+--- /dev/null
++++ b/ipxe/startup.nsh
+@@ -0,0 +1 @@
++fs0:arm32.efi
+
+From 444eb0d1fa402a1831f21356eb0f1f21e75d2b7d Mon Sep 17 00:00:00 2001
+From: "Jan ONDREJ (SAL)" <ondrejj(at)salstar.sk>
+Date: Tue, 26 Jan 2021 21:42:19 +0100
+Subject: [PATCH] Added iflinkwait command to wait for network connection.
+
+---
+ ipxe/README.html | 8 +-------
+ 1 file changed, 1 insertion(+), 7 deletions(-)
+
+diff --git a/ipxe/README.html b/ipxe/README.html
+index 7b01266eda76b338010fea98fa576ed7a0e30d69..7aeea8d064dab3c9532122b8ed981a1ed9bd8873 100644
+--- a/ipxe/README.html
++++ b/ipxe/README.html
+@@ -9,16 +9,10 @@ Files:
+ 
+ =======================================================================
+ 
+-To create a bootable floppy, type
+-    cat ipxe.dsk > /dev/fd0
+-where /dev/fd0 is your floppy drive.  This will erase any
+-data already on the disk.
+-
+ To create a bootable USB key, type
+     cat ipxe.usb > /dev/sdX
+ where /dev/sdX is your USB key, and is *not* a real hard
+-disk on your system.  This will erase any data already on
+-the USB key.
++disk on your system.  This will erase any data already on the USB key.
+ 
+ To create a bootable CD-ROM, burn the ISO image 
+ ipxe.iso to a blank CD-ROM.
+
+From 056c8d933728be50a2cd648c83bffc71af1df2bf Mon Sep 17 00:00:00 2001
+From: "Jan ONDREJ (SAL)" <ondrejj(at)salstar.sk>
+Date: Sun, 9 May 2021 06:55:17 +0200
+Subject: [PATCH] Fedora 34 added. Added rockylinux beta. Ubuntu update (still
+ not working for new ubuntu releases). GParted update. Tails update. Live
+ packages updated.
+
+---
+ ipxe/config/com1/ioapi.h | 0
+ ipxe/config/com2/ioapi.h | 0
+ 2 files changed, 0 insertions(+), 0 deletions(-)
+
+diff --git a/ipxe/config/com1/ioapi.h b/ipxe/config/com1/ioapi.h
+new file mode 100644
+index 0000000000000000000000000000000000000000..e69de29bb2d1d6434b8b29ae775ad8c2e48c5391
+diff --git a/ipxe/config/com2/ioapi.h b/ipxe/config/com2/ioapi.h
+new file mode 100644
+index 0000000000000000000000000000000000000000..e69de29bb2d1d6434b8b29ae775ad8c2e48c5391
+
+From ef8c385c98cce7f8c4212eccb704fd7f40479a12 Mon Sep 17 00:00:00 2001
+From: "Jan ONDREJ (SAL)" <ondrejj(at)salstar.sk>
+Date: Sun, 9 May 2021 21:32:16 +0200
+Subject: [PATCH] Add imgextract command to ipxe builds.
+
+---
+ ipxe/config/general.h | 2 ++
+ 1 file changed, 2 insertions(+)
+
+diff --git a/ipxe/config/general.h b/ipxe/config/general.h
+index 880a07070171f4dc9f09009840ef2653ebfb3ecc..c1346ed5291411ac075fa7a25566a88c308aee7a 100644
+--- a/ipxe/config/general.h
++++ b/ipxe/config/general.h
+@@ -42,6 +42,8 @@
+ #define PROFSTAT_CMD          /* Profiling commands */
+ #define NTP_CMD               /* NTP commands */
+ #define CERT_CMD              /* Certificate management commands */
++//#define IMAGE_MEM_CMD         /* Read memory command */
++#define IMAGE_ARCHIVE_CMD     /* Archive image management commands */
+ 
+ // error messages
+ #define  ERRMSG_80211		/* All 802.11 error descriptions (~3.3kb) */

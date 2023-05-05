@@ -1,0 +1,10 @@
+#!ipxe
+
+set mirror http://vault.centos.org/
+set menu centos
+set ver 7.4.1708
+set bt normal
+set params ${params} pkgrepo=none,epel pkgs=salpack ks=https://www.salstar.sk/boot/ks/centos7
+imgverify fedora.ipxe ${sigs}fedora.ipxe.sig
+chain fedora.ipxe
+exit

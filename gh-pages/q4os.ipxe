@@ -1,0 +1,18 @@
+#!ipxe
+
+# This doesn't really works. ISO can't find cdrom. :-(
+
+set project q4os
+set ver 0.5.0
+iseq ${arch} x86_64 && set q4arch x64 || set q4arch i386
+set lang en
+set iso ${project}-${ver}-${q4arch}-${lang}.iso
+set url http://www.q4os.org/downloads/${iso}
+
+sanboot ${url} || echo Trying memdisk method.
+
+imgtrust --allow
+kernel ${url}memdisk iso raw ${params}
+imgverify memdisk ${sigs}memdisk.sig
+initrd ${url}
+boot

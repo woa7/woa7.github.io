@@ -1,0 +1,45 @@
+#!ipxe
+
+# Doen't work anymore. There is no working mirror form mandriva.
+
+set os Mandriva
+
+menu ${os}
+item current ${os} ${arch5} Current
+item 2011 ${os} ${arch5} 2011
+item 2010.2 ${os} ${arch5} 2010.2
+item 2010.1 ${os} ${arch5} 2010.1
+item 2010.0 ${os} ${arch5} 2010.0
+item 2009.1 ${os} ${arch5} 2009.1
+item 2009.0 ${os} ${arch5} 2009.0
+item 2008.1 ${os} ${arch5} 2008.1
+item --key o other Choose other version [o]
+choose ver || exit 0
+
+iseq ${ver} other || goto skip_read_ver
+echo ${cls}
+echo -n Enter version: ${} && read ver
+:skip_read_ver
+
+set server mandriva.mirror.dkm.cz
+iseq ${mirror} ${default_mirror} && set mirror http://${server}/ ||
+set dir pub/mandriva/official/${ver}/${arch5}
+set automatic method:http,network:dhcp,server:${server},directory:/${dir}
+
+imgfree
+imgtrust --allow
+kernel ${mirror}${dir}/isolinux/alt1/vmlinuz
+initrd ${mirror}${dir}/isolinux/alt1/all.rdz
+imgargs vmlinuz initrd=all.rdz automatic=${automatic} vga=788 splash=silent ${params}
+boot
+exit 0
+
+
+# default boot, type "alt1" after boot
+set 209:string isolinux.cfg
+set 210:string ${mirror}${dir}/isolinux/
+
+imgfree
+kernel ${url}pxelinux.0 ${params}  
+imgverify pxelinux.0 ${sigs}pxelinux.0.sig
+boot

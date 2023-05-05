@@ -1,0 +1,75 @@
+#!ipxe
+
+:pmagic_menu
+set dir mirrors/pmagic
+set os Parted Magic
+menu ${os} (pmagic)
+item 2013_08_01 ${os} 2013_08_01
+#item 2013_06_15 ${os} 2013_06_15
+#item 2013_05_01 ${os} 2013_05_01
+#item 2013_02_28 ${os} 2013_02_28
+#item 2013_01_29 ${os} 2013_01_29
+item --key o other Choose other version [o]
+choose ver || exit 0
+
+iseq ${ver} other || goto skip_read_ver
+echo ${cls}
+echo -n Enter version: ${} && read ver
+:skip_read_ver
+
+:pmagic_arch
+menu ${os} ${ver}
+item --key 6 x86_64 ${os} ${ver} (x86_64) [6]
+iseq ${arch} i386 && set default --default || set default --
+item --key p ${default} i686 ${os} ${ver} (i686) [p]
+item --key 5 i586 ${os} ${ver} (i586) [5]
+choose value || exit 0
+echo ${cls}
+set pmarch ${}
+goto boot_pmagic_${value}
+
+:boot_pmagic_base
+imgfree
+kernel ${mirror}/${dir}/pmagic_pxe_${ver}/pmagic/${bzimage} || goto sf_boot
+imgverify ${bzimage} ${sigs}${dir}/pmagic_pxe_${ver}/pmagic/${bzimage}.sig
+isset ${cleanpmagic} || initrd images/modules.cgz
+isset ${cleanpmagic} || imgverify modules.cgz ${sigs}images/modules.cgz.sig
+initrd ${mirror}/${dir}/pmagic_pxe_${ver}/pmagic/initrd.img
+imgverify initrd.img ${sigs}${dir}/pmagic_pxe_${ver}/pmagic/initrd.img.sig
+imgargs ${bzimage} initrd=initrd.img edd=off load_ramdisk=1 prompt_ramdisk=0 rw vga=normal loglevel=9 max_loop=256 ${params}
+boot
+exit
+
+:boot_pmagic_i586
+set pmarch _i586
+set dir ${dir}/i586
+set bzimage bzImage
+goto boot_pmagic_base
+
+:boot_pmagic_i686
+set pmarch _i686
+set dir ${dir}
+set bzimage bzImage
+goto boot_pmagic_base
+
+:boot_pmagic_x86_64
+clear pmarch
+set dir ${dir}
+set bzimage bzImage64
+goto boot_pmagic_base
+
+:sf_boot
+menu :-( ERROR :-(
+item --gap Image not found on ${mirror} !
+item --gap Press ENTER to direct boot from sourceforge.
+item --gap
+item --gap WARNING!
+item --gap This is not a secure way, signature check will be skipped!
+item --gap
+item ACCEPT ACCEPT
+choose accept || exit
+
+set project partedmagic
+set iso partedmagic/Parted%20Magic%20${ver}/pmagic_${ver}${pmarch}.iso
+imgverify sourceforge.ipxe ${sigs}sourceforge.ipxe.sig
+chain sourceforge.ipxe

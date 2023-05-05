@@ -1,0 +1,9 @@
+#!ipxe
+
+# http://trinityhome.org/Home/
+# This doesn't really works. ISO can't find cdrom. :-(
+
+set mirror http://rm.mirror.garr.it/mirrors/trk/
+set iso trinity-rescue-kit.3.4-build-372.iso
+
+sanboot --no-describe ${mirror}/${iso}

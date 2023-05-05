@@ -1,0 +1,4 @@
+Example custom scripts. Use "config" parameter to override your custom
+scripts. Example:
+
+  config=http://boot.salstar.sk/ks/custom

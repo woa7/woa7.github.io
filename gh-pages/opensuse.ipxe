@@ -1,0 +1,28 @@
+#!ipxe
+
+menu openSUSE ${arch}
+item leap/15.4 openSUSE Leap 15.4
+item leap/15.3 openSUSE Leap 15.3
+item leap/15.2 openSUSE Leap 15.2
+item leap/15.1 openSUSE Leap 15.1
+item leap/15.0 openSUSE Leap 15.0
+#item 13.2 openSUSE 13.2
+#item 12.2 openSUSE 12.2
+#item 11.4 openSUSE 11.4
+#item 11.3 openSUSE 11.3
+#item factory openSUSE factory
+choose ver || goto opensuse_exit
+
+iseq ${mirror} ${default_mirror} && set mirror http://ftp.linux.cz/pub/linux/opensuse/ ||
+set dir distribution/${ver}/repo/oss/
+iseq ${ver} factory && set dir ${ver}/repo/oss/ ||
+
+imgfree
+imgtrust --allow
+kernel ${mirror}${dir}boot/${arch}/loader/linux
+initrd ${mirror}${dir}boot/${arch}/loader/initrd
+imgargs linux initrd=initrd netsetup=dhcp install=${mirror}${dir} ${params}
+boot
+
+:opensuse_exit
+exit 0

@@ -1,0 +1,439 @@
+#!ipxe
+
+:start
+set url https://boot.salstar.sk/
+set default_mirror http://ftp.upjs.sk${mirror_port}/pub
+:start2
+set mirror ${default_mirror}
+set sigs ${url}sigs/
+
+iseq ${boot_salstar_version} 1 && goto version_ok ||
+echo
+echo IPXE version too old, rechaining ...
+chain ${url}/ipxe/ipxe.kpxe ||
+:version_ok
+
+iseq ${cls} serial && goto ignore_cls ||
+set cls:hex 1b:5b:4a  # ANSI clear screen sequence - "^[[J"
+set cls ${cls:string}
+:ignore_cls
+
+isset ${admin_ip} || set admin_ip 158.197.240.41
+isset ${arch} && goto skip_arch_detect ||
+iseq ${buildarch} arm32 && set arch armhfp && goto skip_arch_detect ||
+cpuid --ext 29 && set arch x86_64 || set arch i386
+:skip_arch_detect
+isset ${menu} || goto skip_auto_menu
+goto ${menu} ||
+imgverify ${menu}.ipxe ${sigs}${menu}.ipxe.sig && chain ${menu}.ipxe || goto error
+:skip_auto_menu
+
+isset ${ip} || dhcp || echo DHCP failed
+
+imgtrust
+
+:main_menu
+clear version
+set space:hex 20:20
+set space ${space:string}
+iseq ${arch} i386 && set arch5 i586 || set arch5 ${arch}
+iseq ${arch} x86_64 && set arch_a amd64 || set arch_a ${arch}
+menu SAL's BOOT MENU [Local IP: ${netX/ip} on ${netX/chip}]
+item --gap Default:
+item --key l local ${space} Boot local hdd [l]
+item --gap Operating systems:
+# RPM based systems
+item --key f fedora ${space} Fedora ${arch} [f]
+item --key c centos ${space} CentOS ${arch} [c]
+item --key a almalinux ${space} AlmaLinux ${arch} [a] ||
+isset ${extended_menu} && item --key Y rockylinux ${space} Rocky Linux ${arch} [Y] ||
+isset ${extended_menu} && item --key S scientific ${space} Scientific Linux ${arch} [S] ||
+isset ${extended_menu} && item --key o opensuse ${space} openSUSE ${arch} [o] ||
+isset ${extended_menu} && item --key M mageia ${space} Mageia ${arch5} [M] ||
+# Deb based systems
+item --key b debian ${space} Debian ${arch_a} [b]
+isset ${extended_menu} && item --key u ubuntu ${space} Ubuntu ${arch_a} [u] ||
+# Others
+isset ${extended_menu} && item --key H archlinux ${space} ArchLinux [H] ||
+isset ${extended_menu} && item --key P alpine ${space} Alpine Linux [A] ||
+isset ${extended_menu} && item --key L slackware ${space} Slackware ${bits} bit [L] ||
+isset ${extended_menu} && item --key g gparted ${space} GParted ${bits} bit [g] ||
+isset ${extended_menu} && item --key R sysresc ${space} SystemRescue [R] ||
+#isset ${extended_menu} && item --key p pmagic ${space} Parted Magic [p] ||
+isset ${extended_menu} && item --key z clonezilla ${space} Clonezilla [z] ||
+isset ${extended_menu} && item --key T tinycore ${space} Tiny Core Linux [T] ||
+# BSD systems
+isset ${extended_menu} && item --key y bsd ${space} BSD systems [y] ||
+# DOS
+item --key d dos ${space} FreeDOS [d]
+# Other netboot sites
+item --key O chained ${space} Chain other netboot sites [O]
+isset ${extended_menu} || item --key x extended_menu ${space} Other systems [x]
+item --gap Options:
+iseq ${arch} x86_64 && set bits 64 || set bits 32
+item --key A changebits ${space} Architecture: ${arch} (${bits}bit) [A]
+item --key 0x09 params_menu ${space} Kernel parameters: ${params}
+item --gap Tools:
+item --key t tools ${space} Hardware tools [t]
+isset ${extended_menu} && item --key D nodns ${space} Disable DNS, use IPv4 address only. [D] ||
+item --key . predefined ${space} Predefined systems menu [.]
+item --key , ipxecon ${space} Select iPXE console [,]
+item --key s shell ${space} iPXE shell [s]
+isset ${menu} && set timeout 0 || set timeout 60000
+choose --timeout ${timeout} --default ${menu} menu || goto local
+echo ${cls}
+goto ${menu} ||
+imgverify ${menu}.ipxe ${sigs}${menu}.ipxe.sig || goto error
+chain ${menu}.ipxe || goto error
+goto main_menu
+
+:error
+echo Error occured, press any key to return to menu ...
+prompt
+goto main_menu
+
+:local
+echo Booting from local disks ...
+exit 0
+
+:reload
+echo Reloading menu.ipxe ...
+imgverify menu.ipxe ${sigs}menu.ipxe || goto error
+chain menu.ipxe
+
+:nodns
+echo Setting all URLs to use IPv4 only (no DNS) ...
+set url http://158.197.16.66/boot/
+set default_mirror http://158.197.16.70${mirror_port}/pub
+clear menu
+goto start2
+
+:pxelinux
+echo Loading pxelinux ...
+set next-server 158.197.16.70
+set 209:string pxelinux.cfg/default
+set 210:string tftp://${next-server}/
+kernel ${url}pxelinux.0
+imgverify pxelinux.0 ${sigs}pxelinux.0.sig || goto error
+boot
+
+:tools
+imgverify tools.ipxe ${sigs}tools.ipxe.sig || goto error
+chain tools.ipxe || goto error
+goto main_menu
+
+:shell
+echo Type "exit" to return to menu.
+# temporarily disable imgtrust for shell
+imgtrust --allow
+set menu main_menu
+shell
+imgtrust ||
+goto main_menu
+
+:changebits
+iseq ${arch} x86_64 && set arch i386 || set arch x86_64
+goto main_menu
+
+# this is not used yet
+:select_arch
+menu Select architecture
+item --gap Basic:
+item --key 3 i386 i386 (32 bit) [3]
+item --key 6 x86_64 x86_64/amd64 (64 bit) [6]
+item --gap Extended:
+item i486 i486
+item i586 i586
+item i686 i686
+choose --default ${march} march || goto main_menu
+goto set_arch_${march}
+
+:set_arch_i386
+set arch i386
+set arch_a i386
+set xarch x86
+goto main_menu
+
+:set_arch_x86_64
+set arch x86_64
+set arch_a amd64
+set xarch x64
+goto main_menu
+
+:set_arch_i486
+set arch i386
+set arch_a i386
+set xarch x86
+goto main_menu
+
+:set_arch_i586
+set arch i386
+set arch_a i386
+set xarch x86
+goto main_menu
+
+:set_arch_i686
+set arch i386
+set arch_a i386
+set xarch x86
+goto main_menu
+
+:params_menu
+menu Kernel parameters
+item --gap Current: ${params}
+item --gap
+item --gap Basic parameters:
+item --key a autopart ${space} Autopartition [a]
+item --key d disks ${space} Disk selection [d]
+item --key p pkgs ${space} Package selection [p]
+item --key s serial ${space} Serial console ttyS0/ttyS1 [s]
+item --key v vnc ${space} VNC installation [v]
+item --gap Advanced parameters:
+item --key t text ${space} Text mode install [t]
+item --key l lang ${space} Force en_US language [l]
+item --key w passwd ${space} Change predefined root password [w]
+item --key c custom_config ${space} Custom configuration URL [c]
+item --key n network ${space} Network configuration (bonding or static) [n]
+item --key k ksdevice ${space} ksdevice configuration [k]
+item --gap Other:
+item --key e set ${space} Edit parameters [e]
+item --key x exit ${space} Return to main menu [x]
+choose --default ${kernel_params} kernel_params || goto main_menu
+echo ${cls}
+goto params_${kernel_params}
+
+# Kernel parameters
+:params_set
+echo -n Enter parameters: ${} && read params
+goto params_menu
+
+:params_vnc
+set params ${params} inst.vnc inst.vncconnect=${admin_ip}:5500
+goto params_menu
+
+:params_serial
+menu Serial console speed
+item --gap /dev/ttyS0 / COM1
+item --key 0 ttyS0 ${space} ttyS0 - com1, don't set speed [0]
+item --key a ttyS0,115200 ${space} ttyS0,115200 [a]
+item --key b ttyS0,57600 ${space} ttyS0,57600 [b]
+item --key c ttyS0,38400 ${space} ttyS0,38400 [c]
+item --key d ttyS0,9600 ${space} ttyS0,9600 [d]
+item
+item --gap /dev/ttyS1 / COM2
+item --key 1 ttyS1 ${space} ttyS1 - com2, don't set speed [1]
+item --key 2 ttyS1,115200 ${space} ttyS1,115200 [2]
+item --key 3 ttyS1,57600 ${space} ttyS1,57600 [3]
+item --key 4 ttyS1,38400 ${space} ttyS1,38400 [4]
+item --key 5 ttyS1,9600 ${space} ttyS1,9600 [5]
+choose serial_console || goto params_menu
+set params ${params} console=tty0 console=${serial_console}
+goto params_menu
+
+:params_text
+set params ${params} inst.text nomodeset
+goto params_menu
+
+:params_lang
+set params ${params} inst.lang=en_US.UTF-8
+goto params_menu
+
+:params_passwd
+echo If passowrd starts with "$", it's treated as crypted.
+echo -n Enter root password: ${} && read root_passwd
+set params ${params} passwd=${root_passwd}
+goto params_menu
+
+:params_custom_config
+echo -n Enter custom config URL: ${} && read custom_config_url
+set params ${params} config=${custom_config_url}
+goto params_menu
+
+:params_network
+menu Network configuration
+item --key b bond Set bonding device on em1/em2 [b]
+item --key f fedora Fedora/CentOS 7 style (dracut options) [f]
+item --key c centos CentOS 5/6 style [c]
+choose netos || goto params_menu
+iseq ${netos} bond && set params ${params} bond=bond_wan:em1,em2:mode=802.3ad,miimon=100,lacp_rate=1,xmit_hash_policy=1 ||
+iseq ${netos} bond && set ksdevice bond_wan ||
+#set params ${params} ip=${ip}:${next-server}:${gateway}:${netmask}::bond_wan BOOTIF=bond_wan
+iseq ${netos} fedora && set params ${params} ip=${ip}::${gateway}:${netmask}:${ip}::none nameserver=${dns} ||
+iseq ${netos} centos && set params ${params} ip=${ip} gateway=${gateway} netmask=${netmask} dns=${dns} ||
+goto params_menu
+
+:params_ksdevice
+menu KSDevice configuration
+item --key l link ksdevice=link [l]
+item --key 0 eth0 ksdevice=eth0 [0]
+item --key 1 eth1 ksdevice=eth1 [1]
+item --key 2 eth2 ksdevice=eth2 [2]
+item --key 3 eth3 ksdevice=eth3 [3]
+item --key w bond_wan ksdevice=bond_wan [w]
+item --key b bootif ksdevice=bootif (default) [b]
+choose ksdevice || goto params_menu
+goto params_menu
+
+:params_autopart_clear
+set autopart root
+clear part_ask_root
+clear part_ask_efi
+clear part_ask_vg
+clear part_ask_swap
+clear part_ask_var
+clear part_ask_home
+clear part_ask_www
+clear part_ask_mysql
+clear part_ask_pgsql
+clear part_ask_redis
+clear part_ask_mongo
+clear part_ask_opt
+clear part_auto
+goto params_autopart_set
+
+:params_autopart
+set part_ask_root 8
+set part_ask_swap 1
+iseq ${platform} efi && set part_ask_efi 200m ||
+
+:params_autopart_set
+set part_auto part=root=${part_ask_root}
+iseq "${part_ask_efi}" "" || set part_auto ${part_auto},efi=${part_ask_efi}
+iseq "${part_ask_vg}" "" || set part_auto ${part_auto},vg=${part_ask_vg}
+iseq "${part_ask_swap}" "" || set part_auto ${part_auto},swap=${part_ask_swap}
+iseq "${part_ask_var}" "" || set part_auto ${part_auto},var=${part_ask_var}
+iseq "${part_ask_home}" "" || set part_auto ${part_auto},home=${part_ask_home}
+iseq "${part_ask_www}" "" || set part_auto ${part_auto},www=${part_ask_www}
+iseq "${part_ask_mysql}" "" || set part_auto ${part_auto},mysql=${part_ask_mysql}
+iseq "${part_ask_pgsql}" "" || set part_auto ${part_auto},pgsql=${part_ask_pgsql}
+iseq "${part_ask_redis}" "" || set part_auto ${part_auto},redis=${part_ask_redis}
+iseq "${part_ask_mongo}" "" || set part_auto ${part_auto},mongo=${part_ask_mongo}
+iseq "${part_ask_opt}" "" || set part_auto ${part_auto},opt=${part_ask_opt}
+
+menu Autopartition
+item --key x apply ${space} [x] Apply settings and exit menu
+item --key c clear ${space} [c] Clear autopart values
+item --gap Current settings: ${part_auto}
+item --key r root  ${space} [r] /              = ${part_ask_root} (root partition)
+item --key e efi   ${space} [e] /boot/efi      = ${part_ask_efi} (EFI boot)
+item --key g vg    ${space} [g] LVM VG = "${part_ask_vg}" (volume group name)
+item --key s swap  ${space} [s] swap           = ${part_ask_swap}
+item --key v var   ${space} [v] /var           = ${part_ask_var}
+item --key h home  ${space} [h] /home          = ${part_ask_home}
+item --key w www   ${space} [w] /var/www       = ${part_ask_www}
+item --key m mysql ${space} [m] /var/lib/mysql = ${part_ask_mysql}
+item --key p pgsql ${space} [p] /var/lib/pgsql = ${part_ask_pgsql}
+item --key R redis ${space} [R] /var/lib/redis = ${part_ask_redis}
+item --key M mongo ${space} [M] /var/lib/mongo = ${part_ask_mongo}
+item --key o opt   ${space} [o] /opt           = ${part_ask_opt}
+item --gap Predefined settings
+item --key 8 root8 ${space} [8] part=root=8,vg=vg1,swap=1
+item --key 4 root4 ${space} [4] part=root=4,vg=vg1,swap=1
+item --key H homemax ${space} [H] part=root=8,vg=vg1,swap=2,home=max
+item --key E efipredef ${space} [E] part=efi=200m,root=6,swap=1 (for EFI/UEFI systems)
+#item --gap These are for large disks (>=2 TB)
+#item --key B biosboot ${space} [B] part=biosboot=2m,root=8,swap=1
+#item --key G gpt ${space} [G] inst.gpt part=biosboot=2m,root=8,swap=1
+choose --default ${autopart} autopart || goto params_autopart_cancel
+
+# predefined partitions
+iseq ${autopart} root8 && set part_auto part=root=8,vg=vg1,swap=1 ||
+iseq ${autopart} root4 && set part_auto part=root=4,vg=vg1,swap=1 ||
+iseq ${autopart} homemax && set part_auto part=root=8,vg=vg1,swap=2,home=max ||
+iseq ${autopart} efipredef && set part_auto part=efi=200m,root=6,swap=1 ||
+#iseq ${autopart} biosboot && set part_auto part=biosboot=2m,root=8,swap=1 ||
+#iseq ${autopart} gpt && set part_auto inst.gpt part=biosboot=2m,root=8,swap=1 ||
+# asked settings
+iseq ${autopart} apply && set params ${params} ${part_auto} && goto params_menu ||
+iseq ${autopart} clear && goto params_autopart_clear ||
+iseq ${autopart} vg && echo -n Enter LVM VG name: ${} && read part_ask_vg && goto params_autopart_set ||
+echo -n Enter value in GiB for "${autopart}": ${} && read part_ask_${autopart} ||
+goto params_autopart_set
+
+:params_autopart_cancel
+menu Apply settings?
+item --gap Current settings:
+item --gap ${part_auto}
+item
+item --key y apply Apply settings [y]
+item --key n exit Do not apply, just exit autopart menu [n]
+choose autopart || goto params_menu
+iseq ${autopart} apply && set params ${params} ${part_auto} ||
+goto params_menu
+
+:params_disks
+menu Disk selection
+item --gap Autodetection
+item --key 2 mirror ${space} sda/vda, sdb/vdb - RAID1 (fallback to single) [2]
+item --key 1 single ${space} sda/vda - single [1]
+item
+item --gap Virtual servers (guests)
+item --key w vdab ${space} vda, vdb - RAID1 [w]
+item --key v vda ${space} vda only - single [v]
+item
+item --gap Physical servers (hosts)
+item --key b sdab ${space} sda, sdb - RAID1 [b]
+item --key a sda ${space} sda only - single [a]
+choose disks || goto params_menu
+iseq ${disks} mirror && set params ${params} disks=sda|vda|sdb|vdb ||
+iseq ${disks} single && set params ${params} disks=sda|vda ||
+iseq ${disks} vdab && set params ${params} disks=vda,vdb ||
+iseq ${disks} vda && set params ${params} disks=${disks} ||
+iseq ${disks} sdab && set params ${params} disks=sda,sdb ||
+iseq ${disks} sda && set params ${params} disks=${disks} ||
+goto params_menu
+
+:params_pkgs
+menu Package selection
+item --key b core Core salpack only [c]
+item --key g guestnrpe Guest with NRPE [g]
+item --key w web Guest web server with mariadb and NRPE [w]
+item --key m mail Guest mail server with mariadb and NRPE [m]
+item --key k kvmnrpe KVM host with NRPE [k]
+item --key n nrpe Core and NRPE salpack [n]
+item --key d desktop Core salpack with desktop apps [d]
+choose pkgs || goto params_menu
+iseq ${pkgs} core && set params ${params} pkgs=salpack ||
+iseq ${pkgs} guestnrpe && set params ${params} pkgs=salpack-nrpe,salpack-guest,-iwl*-firmware ||
+iseq ${pkgs} kvmnrpe && set params ${params} pkgs=salpack-nrpe,salpack-kvm ||
+iseq ${pkgs} web && set params ${params} pkgs=salpack-nrpe,salpack-guest,salpack-web,salpack-mariadb,-iwl*-firmware ||
+iseq ${pkgs} mail && set params ${params} pkgs=salpack-nrpe,salpack-guest,salpack-mail,salpack-mariadb,-iwl*-firmware ||
+iseq ${pkgs} nrpe && set params ${params} pkgs=salpack-nrpe,-iwl*-firmware ||
+iseq ${pkgs} desktop && set params ${params} pkgs=salpack,desktop ||
+goto params_menu
+
+:params_exit
+goto main_menu
+
+:extended_menu
+isset ${extended_menu} && clear extended_menu || set extended_menu 1
+goto main_menu
+
+:debian
+:ubuntu
+imgverify deb.ipxe ${sigs}deb.ipxe.sig || goto error
+chain deb.ipxe || goto error
+goto main_menu
+
+# Predefined systems
+:predefined
+imgverify predefined.ipxe ${sigs}predefined.ipxe.sig || goto error
+chain predefined.ipxe || goto error
+goto main_menu
+
+# Select iPXE console
+:ipxecon
+menu Select iPXE console
+item --key v vga VGA only [v]
+item --key 0 ttyS0 VGA + ttyS0 (com1) [0]
+item --key 1 ttyS1 VGA + ttyS1 (com2) [1]
+choose ipxecon || goto main_menu
+iseq ${ipxecon} vga && set ipxecondir ipxe/ ||
+iseq ${ipxecon} ttyS0 && set ipxecondir ipxe/com1/ ||
+iseq ${ipxecon} ttyS1 && set ipxecondir ipxe/com2/ ||
+set ipxeconurl ${ipxecondir}ipxe.lkrn
+imgfree
+kernel ${ipxeconurl} || goto error
+imgverify ipxe.lkrn ${sigs}${ipxecondir}ipxe.lkrn.sig || goto error
+boot
+goto main_menu

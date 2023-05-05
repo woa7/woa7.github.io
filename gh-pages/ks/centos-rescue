@@ -1,0 +1,54 @@
+#based on "rescue" configuration
+# System authorization information
+auth  --useshadow  --enablemd5 
+# System bootloader configuration
+bootloader --append="" --location=mbr --timeout=1
+# Firewall configuration
+firewall --enabled --port=ssh:tcp
+# Run the Setup Agent on first boot
+firstboot --enable
+# Use interactive kickstart installation method
+#interactive
+# System keyboard
+keyboard us
+# System language
+lang sk_SK.UTF-8
+#lang en_US.UTF-8
+# Installation logging level
+#logging info
+# Repository configuration
+#:BEGIN:centos
+url --url=http://ftp.upjs.sk/pub/centos/6/os/x86_64/
+repo --name=Updates --baseurl=http://ftp.upjs.sk/pub/centos/6/updates/x86_64/
+repo --name=EPEL --baseurl=http://ftp.upjs.sk/pub/mirrors/epel/6/x86_64/
+#repo --name=Salstar --baseurl=http://www.salstar.sk/pub/centos/6/
+#:END:centos
+# Network information
+network --bootproto=dhcp --onboot=on
+#vnc --host=158.197.240.41 --port=5500
+# Reboot after installation
+#reboot
+#Root password
+rootpw --iscrypted $6$u5FhpPHs$N69Gq3rAUVCzyCHUiiH5fScNPPgB0qVAGhlJ52g5XE.R5BSepuH.BmwyMjOYnM9n3ew0cE0VIajJirBKY/Mzm0
+# SELinux configuration
+selinux --permissive
+# System timezone
+timezone --utc Europe/Bratislava
+# Install OS instead of upgrade
+rescue
+# Services
+services --disabled=netfs --enabled=network
+
+%pre --interpreter /bin/bash
+mkdir -p /etc/ssh
+cat > /etc/ssh/sshd_config << EOF
+Port 22
+PasswordAuthentication yes
+UsePAM no
+AcceptEnv LANG LC_ALL LANGUAGE
+Subsystem       sftp internal-sftp
+EOF
+SSH_USE_STRONG_RNG=0
+AUTOCREATE_SERVER_KEYS=RSAONLY
+/usr/sbin/sshd
+%end

@@ -1,0 +1,10 @@
+#!ipxe
+
+# This does not really works. Testing only.
+
+set mirror http://ftp.freenet.de/pub/ftp.uni-kl.de/pub/linux/knoppix/
+set iso KNOPPIX_V8.6.0CD-2013-06-16-EN.iso
+#set iso KNOPPIX_V8.6.0bootonly-2013-06-16-EN.iso
+set url ${mirror}/${iso}
+
+sanboot --no-describe ${url}

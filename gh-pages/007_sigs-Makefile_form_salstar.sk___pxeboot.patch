@@ -1,0 +1,1198 @@
+From 20cb1df963722f394c4c1cc4b0c93b4710b620c8 Mon Sep 17 00:00:00 2001
+From: ondrejj <ondrejj@c21728ea-8e09-0410-9ecb-e72249775932>
+Date: Thu, 12 Apr 2012 17:15:15 +0000
+Subject: [PATCH] update
+
+git-svn-id: file:///var/svn/pxeboot@2938 c21728ea-8e09-0410-9ecb-e72249775932
+---
+ sigs/Makefile | 68 +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+ 1 file changed, 68 insertions(+)
+
+diff --git a/sigs/Makefile b/sigs/Makefile
+new file mode 100644
+index 0000000000000000000000000000000000000000..d9ca7b76651d4f1b2fc2142d360d48c1314fc3ee
+--- /dev/null
++++ b/sigs/Makefile
+@@ -0,0 +1,68 @@
++SIGN=openssl cms -sign -binary -noattr -signer ~/sal/codesign/codesign.crt -inkey ~/sal/codesign/codesign.key -certfile ~/sal/codesign/ca.crt -outform DER
++
++FTP=/home/ftp/pub
++
++IPXE=$(shell cd ..; echo *.ipxe)
++FEDORA=$(shell cd $(FTP); \
++	echo fedora/linux/*/*/Fedora/*/os/isolinux/vmlinuz \
++	     fedora/linux/*/*/Fedora/*/os/isolinux/initrd.img \
++	     fedora/linux/*/*/*/Fedora/*/os/isolinux/vmlinuz \
++	     fedora/linux/*/*/*/Fedora/*/os/isolinux/initrd.img \
++	)
++CENTOS=$(shell cd $(FTP); \
++	echo centos/*/os/*/isolinux/vmlinuz \
++             centos/*/os/*/isolinux/initrd.img \
++	)
++PMAGIC=$(shell cd $(FTP); find mirrors/pmagic -name bzImage -or -name initrd.img)
++FREEDOS=$(shell cd $(FTP); find mirrors/freedos -type f)
++IMAGES=$(shell cd ..; echo images/*)
++
++SOURCES=\
++	$(IPXE) \
++	images/modules.cgz \
++	memdisk \
++	pxelinux.0 \
++	memtest/memtest \
++	memtest/memtest86+-4.20.lkrn \
++	$(FEDORA) \
++	$(CENTOS) \
++	$(PMAGIC) \
++	$(FREEDOS) \
++	$(IMAGES)
++
++TARGETS=$(SOURCES:=.sig)
++
++all:	$(TARGETS)
++
++clean:
++	rm -f $(TARGETS)
++	rm -rf images fedora centos mirrors memtest
++
++%.ipxe.sig:	../%.ipxe
++	$(SIGN) -in $< -out $@
++
++images/%.sig:	../images/%
++	@mkdir -p images
++	$(SIGN) -in $< -out $@
++
++fedora/%.sig:	$(FTP)/fedora/%
++	@mkdir -p `dirname $@`
++	$(SIGN) -in $< -out $@
++
++centos/%.sig:	$(FTP)/centos/%
++	@mkdir -p `dirname $@`
++	$(SIGN) -in $< -out $@
++
++mirrors/%.sig:	$(FTP)/mirrors/%
++	@mkdir -p `dirname $@`
++	$(SIGN) -in $< -out $@
++
++memdisk.sig:	../memdisk
++	$(SIGN) -in $< -out $@
++
++pxelinux.0.sig:	../pxelinux.0
++	$(SIGN) -in $< -out $@
++
++memtest/%.sig:	../memtest/%
++	@mkdir -p `dirname $@`
++	$(SIGN) -in $< -out $@
+
+From afa5c4608abf967af3c854032043308cda7fece7 Mon Sep 17 00:00:00 2001
+From: ondrejj <ondrejj@c21728ea-8e09-0410-9ecb-e72249775932>
+Date: Sat, 14 Apr 2012 20:53:26 +0000
+Subject: [PATCH] update
+
+git-svn-id: file:///var/svn/pxeboot@2940 c21728ea-8e09-0410-9ecb-e72249775932
+---
+ sigs/Makefile | 15 +++++----------
+ 1 file changed, 5 insertions(+), 10 deletions(-)
+
+diff --git a/sigs/Makefile b/sigs/Makefile
+index d9ca7b76651d4f1b2fc2142d360d48c1314fc3ee..53a69e2b3201008b45aaba4b2e619ae03b912149 100644
+--- a/sigs/Makefile
++++ b/sigs/Makefile
+@@ -15,20 +15,16 @@ CENTOS=$(shell cd $(FTP); \
+ 	)
+ PMAGIC=$(shell cd $(FTP); find mirrors/pmagic -name bzImage -or -name initrd.img)
+ FREEDOS=$(shell cd $(FTP); find mirrors/freedos -type f)
+-IMAGES=$(shell cd ..; echo images/*)
+ 
+ SOURCES=\
+ 	$(IPXE) \
+-	images/modules.cgz \
+ 	memdisk \
+ 	pxelinux.0 \
+-	memtest/memtest \
+-	memtest/memtest86+-4.20.lkrn \
++	$(shell cd ..; echo images/*) \
+ 	$(FEDORA) \
+ 	$(CENTOS) \
+ 	$(PMAGIC) \
+ 	$(FREEDOS) \
+-	$(IMAGES)
+ 
+ TARGETS=$(SOURCES:=.sig)
+ 
+@@ -36,7 +32,10 @@ all:	$(TARGETS)
+ 
+ clean:
+ 	rm -f $(TARGETS)
+-	rm -rf images fedora centos mirrors memtest
++	rm -rf images fedora centos mirrors
++
++echo:
++	for i in $(SOURCES); do echo $$i; done
+ 
+ %.ipxe.sig:	../%.ipxe
+ 	$(SIGN) -in $< -out $@
+@@ -62,7 +61,3 @@ memdisk.sig:	../memdisk
+ 
+ pxelinux.0.sig:	../pxelinux.0
+ 	$(SIGN) -in $< -out $@
+-
+-memtest/%.sig:	../memtest/%
+-	@mkdir -p `dirname $@`
+-	$(SIGN) -in $< -out $@
+
+From 3685b3dfc6145a2f603f4dc4ac40f53256d4701b Mon Sep 17 00:00:00 2001
+From: ondrejj <ondrejj@c21728ea-8e09-0410-9ecb-e72249775932>
+Date: Mon, 7 May 2012 17:34:19 +0000
+Subject: [PATCH] update
+
+git-svn-id: file:///var/svn/pxeboot@2974 c21728ea-8e09-0410-9ecb-e72249775932
+---
+ sigs/Makefile | 29 ++++++++++++++++++++++++++---
+ 1 file changed, 26 insertions(+), 3 deletions(-)
+
+diff --git a/sigs/Makefile b/sigs/Makefile
+index 53a69e2b3201008b45aaba4b2e619ae03b912149..c20170541369c4d7ea382d7378996a787356e805 100644
+--- a/sigs/Makefile
++++ b/sigs/Makefile
+@@ -2,7 +2,7 @@ SIGN=openssl cms -sign -binary -noattr -signer ~/sal/codesign/codesign.crt -inke
+ 
+ FTP=/home/ftp/pub
+ 
+-IPXE=$(shell cd ..; echo *.ipxe)
++IPXE=$(shell cd ..; find . -name '*.ipxe')
+ FEDORA=$(shell cd $(FTP); \
+ 	echo fedora/linux/*/*/Fedora/*/os/isolinux/vmlinuz \
+ 	     fedora/linux/*/*/Fedora/*/os/isolinux/initrd.img \
+@@ -13,8 +13,18 @@ CENTOS=$(shell cd $(FTP); \
+ 	echo centos/*/os/*/isolinux/vmlinuz \
+              centos/*/os/*/isolinux/initrd.img \
+ 	)
++SCIENTIFIC=\
++	scientific/6x/x86_64/os/isolinux/vmlinuz \
++	scientific/6x/x86_64/os/isolinux/initrd.img \
++	scientific/6x/i386/os/isolinux/vmlinuz \
++	scientific/6x/i386/os/isolinux/initrd.img \
++	scientific/5x/x86_64/isolinux/vmlinuz \
++	scientific/5x/x86_64/isolinux/initrd.img \
++	scientific/5x/i386/isolinux/vmlinuz \
++	scientific/5x/i386/isolinux/initrd.img
+ PMAGIC=$(shell cd $(FTP); find mirrors/pmagic -name bzImage -or -name initrd.img)
+-FREEDOS=$(shell cd $(FTP); find mirrors/freedos -type f)
++CLONEZILLA=$(shell cd $(FTP); find mirrors/clonezilla -name vmlinuz -or -name initrd.img)
++FREEDOS=$(shell cd $(FTP); find mirrors/images -type f)
+ 
+ SOURCES=\
+ 	$(IPXE) \
+@@ -23,7 +33,9 @@ SOURCES=\
+ 	$(shell cd ..; echo images/*) \
+ 	$(FEDORA) \
+ 	$(CENTOS) \
++	$(SCIENTIFIC) \
+ 	$(PMAGIC) \
++	$(CLONEZILLA) \
+ 	$(FREEDOS) \
+ 
+ TARGETS=$(SOURCES:=.sig)
+@@ -32,7 +44,7 @@ all:	$(TARGETS)
+ 
+ clean:
+ 	rm -f $(TARGETS)
+-	rm -rf images fedora centos mirrors
++	rm -rf images fedora centos mirrors bsd scientific
+ 
+ echo:
+ 	for i in $(SOURCES); do echo $$i; done
+@@ -40,6 +52,10 @@ echo:
+ %.ipxe.sig:	../%.ipxe
+ 	$(SIGN) -in $< -out $@
+ 
++bsd/%.ipxe.sig:	../bsd/%.ipxe
++	mkdir -p bsd
++	$(SIGN) -in $< -out $@
++
+ images/%.sig:	../images/%
+ 	@mkdir -p images
+ 	$(SIGN) -in $< -out $@
+@@ -52,6 +68,13 @@ centos/%.sig:	$(FTP)/centos/%
+ 	@mkdir -p `dirname $@`
+ 	$(SIGN) -in $< -out $@
+ 
++NOSIG=$(@:.sig=)
++scientific/%.sig:
++	@mkdir -p `dirname $@`
++	wget -O $(NOSIG) http://ftp.scientificlinux.org/linux/$(NOSIG)
++	$(SIGN) -in $(NOSIG) -out $@
++	rm -f $(NOSIG)
++
+ mirrors/%.sig:	$(FTP)/mirrors/%
+ 	@mkdir -p `dirname $@`
+ 	$(SIGN) -in $< -out $@
+
+From 6e189521d926cb4a2a976efb7a083d400f0e28a9 Mon Sep 17 00:00:00 2001
+From: ondrejj <ondrejj@c21728ea-8e09-0410-9ecb-e72249775932>
+Date: Wed, 18 Jul 2012 17:47:04 +0000
+Subject: [PATCH] update
+
+git-svn-id: file:///var/svn/pxeboot@3021 c21728ea-8e09-0410-9ecb-e72249775932
+---
+ sigs/Makefile | 3 ++-
+ 1 file changed, 2 insertions(+), 1 deletion(-)
+
+diff --git a/sigs/Makefile b/sigs/Makefile
+index c20170541369c4d7ea382d7378996a787356e805..4b27d7d23dc505b8a3047f3c1dbaf7b11ab6191c 100644
+--- a/sigs/Makefile
++++ b/sigs/Makefile
+@@ -30,6 +30,7 @@ SOURCES=\
+ 	$(IPXE) \
+ 	memdisk \
+ 	pxelinux.0 \
++	memtest.0 \
+ 	$(shell cd ..; echo images/*) \
+ 	$(FEDORA) \
+ 	$(CENTOS) \
+@@ -82,5 +83,5 @@ mirrors/%.sig:	$(FTP)/mirrors/%
+ memdisk.sig:	../memdisk
+ 	$(SIGN) -in $< -out $@
+ 
+-pxelinux.0.sig:	../pxelinux.0
++%.0.sig:	../%.0
+ 	$(SIGN) -in $< -out $@
+
+From 54204a311a1be3099a87eeabf1eba42effaafc34 Mon Sep 17 00:00:00 2001
+From: ondrejj <ondrejj@c21728ea-8e09-0410-9ecb-e72249775932>
+Date: Tue, 5 Feb 2013 12:21:20 +0000
+Subject: [PATCH] update
+
+git-svn-id: file:///var/svn/pxeboot@3233 c21728ea-8e09-0410-9ecb-e72249775932
+---
+ sigs/Makefile | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/sigs/Makefile b/sigs/Makefile
+index 4b27d7d23dc505b8a3047f3c1dbaf7b11ab6191c..b37557c6a9d263e1fada8af78416e793f7917738 100644
+--- a/sigs/Makefile
++++ b/sigs/Makefile
+@@ -22,7 +22,7 @@ SCIENTIFIC=\
+ 	scientific/5x/x86_64/isolinux/initrd.img \
+ 	scientific/5x/i386/isolinux/vmlinuz \
+ 	scientific/5x/i386/isolinux/initrd.img
+-PMAGIC=$(shell cd $(FTP); find mirrors/pmagic -name bzImage -or -name initrd.img)
++PMAGIC=$(shell cd $(FTP); find mirrors/pmagic -name bzImage\* -or -name initrd.img)
+ CLONEZILLA=$(shell cd $(FTP); find mirrors/clonezilla -name vmlinuz -or -name initrd.img)
+ FREEDOS=$(shell cd $(FTP); find mirrors/images -type f)
+ 
+
+From 77d4a64dcdf01088766fb18f5fbbede32b8c081e Mon Sep 17 00:00:00 2001
+From: ondrejj <ondrejj@c21728ea-8e09-0410-9ecb-e72249775932>
+Date: Sat, 13 Apr 2013 19:20:35 +0000
+Subject: [PATCH] update
+
+git-svn-id: file:///var/svn/pxeboot@3294 c21728ea-8e09-0410-9ecb-e72249775932
+---
+ sigs/Makefile | 9 +++++----
+ 1 file changed, 5 insertions(+), 4 deletions(-)
+
+diff --git a/sigs/Makefile b/sigs/Makefile
+index b37557c6a9d263e1fada8af78416e793f7917738..e35037e19b70806c05a8778d2967120e302bd108 100644
+--- a/sigs/Makefile
++++ b/sigs/Makefile
+@@ -1,4 +1,4 @@
+-SIGN=openssl cms -sign -binary -noattr -signer ~/sal/codesign/codesign.crt -inkey ~/sal/codesign/codesign.key -certfile ~/sal/codesign/ca.crt -outform DER
++SIGN=openssl cms -sign -binary -noattr -signer ~/sal/codesign/codesign.crt -inkey ~/sal/codesign/codesign.key -certfile ~/sal/codesign/cacert.pem -outform DER
+ 
+ FTP=/home/ftp/pub
+ 
+@@ -6,8 +6,6 @@ IPXE=$(shell cd ..; find . -name '*.ipxe')
+ FEDORA=$(shell cd $(FTP); \
+ 	echo fedora/linux/*/*/Fedora/*/os/isolinux/vmlinuz \
+ 	     fedora/linux/*/*/Fedora/*/os/isolinux/initrd.img \
+-	     fedora/linux/*/*/*/Fedora/*/os/isolinux/vmlinuz \
+-	     fedora/linux/*/*/*/Fedora/*/os/isolinux/initrd.img \
+ 	)
+ CENTOS=$(shell cd $(FTP); \
+ 	echo centos/*/os/*/isolinux/vmlinuz \
+@@ -83,5 +81,8 @@ mirrors/%.sig:	$(FTP)/mirrors/%
+ memdisk.sig:	../memdisk
+ 	$(SIGN) -in $< -out $@
+ 
+-%.0.sig:	../%.0
++pxelinux.0.sig:	../pxelinux.0
++	$(SIGN) -in $< -out $@
++
++memtest.0.sig:	../images/memtest.0
+ 	$(SIGN) -in $< -out $@
+
+From ca43537a168f5c00742e3a199b9a4290d24a9d4e Mon Sep 17 00:00:00 2001
+From: ondrejj <ondrejj@c21728ea-8e09-0410-9ecb-e72249775932>
+Date: Thu, 16 May 2013 12:12:04 +0000
+Subject: [PATCH] update
+
+git-svn-id: file:///var/svn/pxeboot@3345 c21728ea-8e09-0410-9ecb-e72249775932
+---
+ sigs/Makefile | 14 ++++++++------
+ 1 file changed, 8 insertions(+), 6 deletions(-)
+
+diff --git a/sigs/Makefile b/sigs/Makefile
+index e35037e19b70806c05a8778d2967120e302bd108..07ef0f54ce7a7c1a498975be736e78b0f5da357f 100644
+--- a/sigs/Makefile
++++ b/sigs/Makefile
+@@ -3,13 +3,15 @@ SIGN=openssl cms -sign -binary -noattr -signer ~/sal/codesign/codesign.crt -inke
+ FTP=/home/ftp/pub
+ 
+ IPXE=$(shell cd ..; find . -name '*.ipxe')
+-FEDORA=$(shell cd $(FTP); \
+-	echo fedora/linux/*/*/Fedora/*/os/isolinux/vmlinuz \
+-	     fedora/linux/*/*/Fedora/*/os/isolinux/initrd.img \
++FEDORA=$(shell cd $(FTP); ls -1 \
++	  fedora/linux/releases/*/Fedora/*/os/isolinux/vmlinuz \
++	  fedora/linux/releases/*/Fedora/*/os/isolinux/initrd.img \
++	  fedora/linux/releases/test/*/Fedora/*/os/isolinux/vmlinuz \
++	  fedora/linux/releases/test/*/Fedora/*/os/isolinux/initrd.img \
+ 	)
+-CENTOS=$(shell cd $(FTP); \
+-	echo centos/*/os/*/isolinux/vmlinuz \
+-             centos/*/os/*/isolinux/initrd.img \
++CENTOS=$(shell cd $(FTP); ls -1 \
++	  centos/*/os/*/isolinux/vmlinuz \
++          centos/*/os/*/isolinux/initrd.img \
+ 	)
+ SCIENTIFIC=\
+ 	scientific/6x/x86_64/os/isolinux/vmlinuz \
+
+From 7115f4a2d72372b3f57a1238b4cd1f810700607d Mon Sep 17 00:00:00 2001
+From: ondrejj <ondrejj@c21728ea-8e09-0410-9ecb-e72249775932>
+Date: Thu, 6 Jun 2013 18:01:06 +0000
+Subject: [PATCH] update
+
+git-svn-id: file:///var/svn/pxeboot@3362 c21728ea-8e09-0410-9ecb-e72249775932
+---
+ sigs/Makefile | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/sigs/Makefile b/sigs/Makefile
+index 07ef0f54ce7a7c1a498975be736e78b0f5da357f..81c462808e6a6818ce6b068cd0f720cc1b5adc6e 100644
+--- a/sigs/Makefile
++++ b/sigs/Makefile
+@@ -2,7 +2,7 @@ SIGN=openssl cms -sign -binary -noattr -signer ~/sal/codesign/codesign.crt -inke
+ 
+ FTP=/home/ftp/pub
+ 
+-IPXE=$(shell cd ..; find . -name '*.ipxe')
++IPXE=$(shell cd ..; find . -name '*.ipxe' -and ! -path '*/examples/*')
+ FEDORA=$(shell cd $(FTP); ls -1 \
+ 	  fedora/linux/releases/*/Fedora/*/os/isolinux/vmlinuz \
+ 	  fedora/linux/releases/*/Fedora/*/os/isolinux/initrd.img \
+
+From 774e2ea825db4f9d6916ff89cc957eba32f0043d Mon Sep 17 00:00:00 2001
+From: ondrejj <ondrejj@c21728ea-8e09-0410-9ecb-e72249775932>
+Date: Fri, 9 Aug 2013 19:39:05 +0000
+Subject: [PATCH] update
+
+git-svn-id: file:///var/svn/pxeboot@3403 c21728ea-8e09-0410-9ecb-e72249775932
+---
+ sigs/Makefile | 4 ++++
+ 1 file changed, 4 insertions(+)
+
+diff --git a/sigs/Makefile b/sigs/Makefile
+index 81c462808e6a6818ce6b068cd0f720cc1b5adc6e..98d1ea733516c5b87806d6f8ff46e71cb33d7e1e 100644
+--- a/sigs/Makefile
++++ b/sigs/Makefile
+@@ -88,3 +88,7 @@ pxelinux.0.sig:	../pxelinux.0
+ 
+ memtest.0.sig:	../images/memtest.0
+ 	$(SIGN) -in $< -out $@
++
++pciids/%.ipxe.sig:	../pciids/%.ipxe
++	mkdir -p pciids
++	$(SIGN) -in $< -out $@
+
+From 1f37c20dcfb759cb509da6dde52dbc3a9aeab1e9 Mon Sep 17 00:00:00 2001
+From: ondrejj <ondrejj@c21728ea-8e09-0410-9ecb-e72249775932>
+Date: Mon, 3 Feb 2014 11:32:26 +0000
+Subject: [PATCH] update
+
+git-svn-id: file:///var/svn/pxeboot@3504 c21728ea-8e09-0410-9ecb-e72249775932
+---
+ sigs/Makefile | 3 +++
+ 1 file changed, 3 insertions(+)
+
+diff --git a/sigs/Makefile b/sigs/Makefile
+index 98d1ea733516c5b87806d6f8ff46e71cb33d7e1e..3ef790002dd7335ec16e84a07da399c8a69fe4cf 100644
+--- a/sigs/Makefile
++++ b/sigs/Makefile
+@@ -89,6 +89,9 @@ pxelinux.0.sig:	../pxelinux.0
+ memtest.0.sig:	../images/memtest.0
+ 	$(SIGN) -in $< -out $@
+ 
++memtest5.lkrn.sig:	../images/memtest5.lkrn
++	$(SIGN) -in $< -out $@
++
+ pciids/%.ipxe.sig:	../pciids/%.ipxe
+ 	mkdir -p pciids
+ 	$(SIGN) -in $< -out $@
+
+From ce7a48108da376fa3bc57a9921dc147957370525 Mon Sep 17 00:00:00 2001
+From: "Jan ONDREJ (SAL)" <ondrejj(at)salstar.sk>
+Date: Fri, 31 Oct 2014 19:41:45 +0100
+Subject: [PATCH] Added gparted testing. Added coreos. Other fixes.
+
+---
+ sigs/Makefile | 2 ++
+ 1 file changed, 2 insertions(+)
+
+diff --git a/sigs/Makefile b/sigs/Makefile
+index 3ef790002dd7335ec16e84a07da399c8a69fe4cf..67e20cfbd1e7a9370a5f66baee45852a402c9ad6 100644
+--- a/sigs/Makefile
++++ b/sigs/Makefile
+@@ -14,6 +14,8 @@ CENTOS=$(shell cd $(FTP); ls -1 \
+           centos/*/os/*/isolinux/initrd.img \
+ 	)
+ SCIENTIFIC=\
++	scientific/7x/x86_64/os/isolinux/vmlinuz \
++	scientific/7x/x86_64/os/isolinux/initrd.img \
+ 	scientific/6x/x86_64/os/isolinux/vmlinuz \
+ 	scientific/6x/x86_64/os/isolinux/initrd.img \
+ 	scientific/6x/i386/os/isolinux/vmlinuz \
+
+From 02c9f89467968c174d5fed480b7a3ee5fa888348 Mon Sep 17 00:00:00 2001
+From: "Jan ONDREJ (SAL)" <ondrejj(at)salstar.sk>
+Date: Tue, 25 Nov 2014 16:34:17 +0100
+Subject: [PATCH] Disk menu added. Small fixes.
+
+---
+ sigs/Makefile | 4 ++--
+ 1 file changed, 2 insertions(+), 2 deletions(-)
+
+diff --git a/sigs/Makefile b/sigs/Makefile
+index 67e20cfbd1e7a9370a5f66baee45852a402c9ad6..6c6bb8dd11a60e1628ecf3fdff660804859e5a1d 100644
+--- a/sigs/Makefile
++++ b/sigs/Makefile
+@@ -6,8 +6,8 @@ IPXE=$(shell cd ..; find . -name '*.ipxe' -and ! -path '*/examples/*')
+ FEDORA=$(shell cd $(FTP); ls -1 \
+ 	  fedora/linux/releases/*/Fedora/*/os/isolinux/vmlinuz \
+ 	  fedora/linux/releases/*/Fedora/*/os/isolinux/initrd.img \
+-	  fedora/linux/releases/test/*/Fedora/*/os/isolinux/vmlinuz \
+-	  fedora/linux/releases/test/*/Fedora/*/os/isolinux/initrd.img \
++	  fedora/linux/releases/test/*/*/*/os/isolinux/vmlinuz \
++	  fedora/linux/releases/test/*/*/*/os/isolinux/initrd.img \
+ 	)
+ CENTOS=$(shell cd $(FTP); ls -1 \
+ 	  centos/*/os/*/isolinux/vmlinuz \
+
+From 1c660489569757a3136fa3da2e80100ff4c6d3fa Mon Sep 17 00:00:00 2001
+From: "Jan ONDREJ (SAL)" <ondrejj(at)salstar.sk>
+Date: Thu, 18 Dec 2014 10:42:48 +0100
+Subject: [PATCH] Fedora 21 added
+
+---
+ sigs/Makefile | 4 ++--
+ 1 file changed, 2 insertions(+), 2 deletions(-)
+
+diff --git a/sigs/Makefile b/sigs/Makefile
+index 6c6bb8dd11a60e1628ecf3fdff660804859e5a1d..67b8432b1399fd6d6dfd801d7b61a55c64271f95 100644
+--- a/sigs/Makefile
++++ b/sigs/Makefile
+@@ -4,8 +4,8 @@ FTP=/home/ftp/pub
+ 
+ IPXE=$(shell cd ..; find . -name '*.ipxe' -and ! -path '*/examples/*')
+ FEDORA=$(shell cd $(FTP); ls -1 \
+-	  fedora/linux/releases/*/Fedora/*/os/isolinux/vmlinuz \
+-	  fedora/linux/releases/*/Fedora/*/os/isolinux/initrd.img \
++	  fedora/linux/releases/*/*/*/os/isolinux/vmlinuz \
++	  fedora/linux/releases/*/*/*/os/isolinux/initrd.img \
+ 	  fedora/linux/releases/test/*/*/*/os/isolinux/vmlinuz \
+ 	  fedora/linux/releases/test/*/*/*/os/isolinux/initrd.img \
+ 	)
+
+From 96f65d67e5e049219ca37a53ae68116bdd7fb854 Mon Sep 17 00:00:00 2001
+From: "Jan ONDREJ (SAL)" <ondrejj(at)salstar.sk>
+Date: Wed, 11 Mar 2015 13:50:12 +0100
+Subject: [PATCH] iPXE console selection
+
+---
+ sigs/Makefile | 6 +++++-
+ 1 file changed, 5 insertions(+), 1 deletion(-)
+
+diff --git a/sigs/Makefile b/sigs/Makefile
+index 67b8432b1399fd6d6dfd801d7b61a55c64271f95..28e556a73f9fc09c482cf7f098247fb7520059a3 100644
+--- a/sigs/Makefile
++++ b/sigs/Makefile
+@@ -3,6 +3,7 @@ SIGN=openssl cms -sign -binary -noattr -signer ~/sal/codesign/codesign.crt -inke
+ FTP=/home/ftp/pub
+ 
+ IPXE=$(shell cd ..; find . -name '*.ipxe' -and ! -path '*/examples/*')
++IPXEBIN=ipxe/ipxe.lkrn ipxe/com1/ipxe.lkrn ipxe/com2/ipxe.lkrn
+ FEDORA=$(shell cd $(FTP); ls -1 \
+ 	  fedora/linux/releases/*/*/*/os/isolinux/vmlinuz \
+ 	  fedora/linux/releases/*/*/*/os/isolinux/initrd.img \
+@@ -29,7 +30,7 @@ CLONEZILLA=$(shell cd $(FTP); find mirrors/clonezilla -name vmlinuz -or -name in
+ FREEDOS=$(shell cd $(FTP); find mirrors/images -type f)
+ 
+ SOURCES=\
+-	$(IPXE) \
++	$(IPXE) $(IPXEBIN) \
+ 	memdisk \
+ 	pxelinux.0 \
+ 	memtest.0 \
+@@ -55,6 +56,9 @@ echo:
+ %.ipxe.sig:	../%.ipxe
+ 	$(SIGN) -in $< -out $@
+ 
++ipxe/%.sig:	../ipxe/%
++	$(SIGN) -in $< -out $@
++
+ bsd/%.ipxe.sig:	../bsd/%.ipxe
+ 	mkdir -p bsd
+ 	$(SIGN) -in $< -out $@
+
+From 75d2068f3287532ac03f87228c6bdfbabfabbb69 Mon Sep 17 00:00:00 2001
+From: "Jan ONDREJ (SAL)" <ondrejj(at)salstar.sk>
+Date: Thu, 24 Dec 2015 15:20:21 +0100
+Subject: [PATCH] Fedora 21 moved to EOL-ed. CentOS 7 i386 added. OpenBSD
+ mirror changed.
+
+---
+ sigs/Makefile | 11 ++++++++++-
+ 1 file changed, 10 insertions(+), 1 deletion(-)
+
+diff --git a/sigs/Makefile b/sigs/Makefile
+index 28e556a73f9fc09c482cf7f098247fb7520059a3..d519f862814ae3de95aa81ce413692362839db00 100644
+--- a/sigs/Makefile
++++ b/sigs/Makefile
+@@ -14,6 +14,9 @@ CENTOS=$(shell cd $(FTP); ls -1 \
+ 	  centos/*/os/*/isolinux/vmlinuz \
+           centos/*/os/*/isolinux/initrd.img \
+ 	)
++CENTOS_i386=\
++	centos/7/os/i386/isolinux/vmlinuz \
++	centos/7/os/i386/isolinux/initrd.img
+ SCIENTIFIC=\
+ 	scientific/7x/x86_64/os/isolinux/vmlinuz \
+ 	scientific/7x/x86_64/os/isolinux/initrd.img \
+@@ -36,7 +39,7 @@ SOURCES=\
+ 	memtest.0 \
+ 	$(shell cd ..; echo images/*) \
+ 	$(FEDORA) \
+-	$(CENTOS) \
++	$(CENTOS) $(CENTOS_i386) \
+ 	$(SCIENTIFIC) \
+ 	$(PMAGIC) \
+ 	$(CLONEZILLA) \
+@@ -76,6 +79,12 @@ centos/%.sig:	$(FTP)/centos/%
+ 	$(SIGN) -in $< -out $@
+ 
+ NOSIG=$(@:.sig=)
++centos/7/os/i386/isolinux/%.sig:
++	@mkdir -p `dirname $@`
++	wget -O $(NOSIG) http://mirror.centos.org/altarch`echo $(NOSIG) | sed 's/^centos//'`
++	$(SIGN) -in $(NOSIG) -out $@
++	rm -f $(NOSIG)
++
+ scientific/%.sig:
+ 	@mkdir -p `dirname $@`
+ 	wget -O $(NOSIG) http://ftp.scientificlinux.org/linux/$(NOSIG)
+
+From 720af1e3b0f5fbace0aeb7a9d2c5a568bcfefe06 Mon Sep 17 00:00:00 2001
+From: "Jan ONDREJ (SAL)" <ondrejj(at)salstar.sk>
+Date: Wed, 23 May 2018 14:10:40 +0200
+Subject: [PATCH] Fix Fedora 28 updates repo URL.
+
+---
+ sigs/Makefile | 6 +-----
+ 1 file changed, 1 insertion(+), 5 deletions(-)
+
+diff --git a/sigs/Makefile b/sigs/Makefile
+index d519f862814ae3de95aa81ce413692362839db00..cb4853e1325f567f14f97ce6ff1685947230b399 100644
+--- a/sigs/Makefile
++++ b/sigs/Makefile
+@@ -23,11 +23,7 @@ SCIENTIFIC=\
+ 	scientific/6x/x86_64/os/isolinux/vmlinuz \
+ 	scientific/6x/x86_64/os/isolinux/initrd.img \
+ 	scientific/6x/i386/os/isolinux/vmlinuz \
+-	scientific/6x/i386/os/isolinux/initrd.img \
+-	scientific/5x/x86_64/isolinux/vmlinuz \
+-	scientific/5x/x86_64/isolinux/initrd.img \
+-	scientific/5x/i386/isolinux/vmlinuz \
+-	scientific/5x/i386/isolinux/initrd.img
++	scientific/6x/i386/os/isolinux/initrd.img
+ PMAGIC=$(shell cd $(FTP); find mirrors/pmagic -name bzImage\* -or -name initrd.img)
+ CLONEZILLA=$(shell cd $(FTP); find mirrors/clonezilla -name vmlinuz -or -name initrd.img)
+ FREEDOS=$(shell cd $(FTP); find mirrors/images -type f)
+
+From 7d03fe3f205c1bbcb017d0d87baef81b25471288 Mon Sep 17 00:00:00 2001
+From: "Jan ONDREJ (SAL)" <ondrejj(at)salstar.sk>
+Date: Mon, 23 Sep 2019 16:31:54 +0200
+Subject: [PATCH] Prepared for CentOS 8 release. Removed very old Fedora
+ versions.
+
+---
+ sigs/Makefile | 2 ++
+ 1 file changed, 2 insertions(+)
+
+diff --git a/sigs/Makefile b/sigs/Makefile
+index cb4853e1325f567f14f97ce6ff1685947230b399..cd52e1383dbdcb49f38d23968e1da8ab75f44a9f 100644
+--- a/sigs/Makefile
++++ b/sigs/Makefile
+@@ -13,6 +13,8 @@ FEDORA=$(shell cd $(FTP); ls -1 \
+ CENTOS=$(shell cd $(FTP); ls -1 \
+ 	  centos/*/os/*/isolinux/vmlinuz \
+           centos/*/os/*/isolinux/initrd.img \
++          centos/*/BaseOS/*/os/isolinux/vmlinuz \
++          centos/*/BaseOS/*/os/isolinux/initrd.img \
+ 	)
+ CENTOS_i386=\
+ 	centos/7/os/i386/isolinux/vmlinuz \
+
+From 33294a6537498ea4514b258b6db474c11c0c8871 Mon Sep 17 00:00:00 2001
+From: "Jan ONDREJ (SAL)" <ondrejj(at)salstar.sk>
+Date: Tue, 26 Jan 2021 11:42:22 +0100
+Subject: [PATCH] Combined iso (pcbios, efi and arm). Added default CA-trust
+ from Fedora. Gparted version updates.
+
+---
+ sigs/Makefile | 2 ++
+ 1 file changed, 2 insertions(+)
+
+diff --git a/sigs/Makefile b/sigs/Makefile
+index cd52e1383dbdcb49f38d23968e1da8ab75f44a9f..6c0ad4623285746feb809d975c4711ce2e2b858e 100644
+--- a/sigs/Makefile
++++ b/sigs/Makefile
+@@ -7,6 +7,8 @@ IPXEBIN=ipxe/ipxe.lkrn ipxe/com1/ipxe.lkrn ipxe/com2/ipxe.lkrn
+ FEDORA=$(shell cd $(FTP); ls -1 \
+ 	  fedora/linux/releases/*/*/*/os/isolinux/vmlinuz \
+ 	  fedora/linux/releases/*/*/*/os/isolinux/initrd.img \
++	  fedora/linux/releases/*/*/*/os/images/pxeboot/vmlinuz \
++	  fedora/linux/releases/*/*/*/os/images/pxeboot/initrd.img \
+ 	  fedora/linux/releases/test/*/*/*/os/isolinux/vmlinuz \
+ 	  fedora/linux/releases/test/*/*/*/os/isolinux/initrd.img \
+ 	)
+
+From 01a2d6b612f4202cdf73dfccb810d2bf5e18579b Mon Sep 17 00:00:00 2001
+From: "Jan ONDREJ (SAL)" <ondrejj(at)salstar.sk>
+Date: Thu, 1 Apr 2021 13:17:49 +0200
+Subject: [PATCH] Added AlmaLinux.
+
+---
+ sigs/Makefile | 19 +++++++++++++------
+ 1 file changed, 13 insertions(+), 6 deletions(-)
+
+diff --git a/sigs/Makefile b/sigs/Makefile
+index 6c0ad4623285746feb809d975c4711ce2e2b858e..1554b8b71a78931c9c0ec6b6f8ebae70d8f1a0a0 100644
+--- a/sigs/Makefile
++++ b/sigs/Makefile
+@@ -21,6 +21,9 @@ CENTOS=$(shell cd $(FTP); ls -1 \
+ CENTOS_i386=\
+ 	centos/7/os/i386/isolinux/vmlinuz \
+ 	centos/7/os/i386/isolinux/initrd.img
++ALMALINUX=\
++	almalinux/8/BaseOS/x86_64/os/isolinux/vmlinuz \
++	almalinux/8/BaseOS/x86_64/os/isolinux/initrd.img
+ SCIENTIFIC=\
+ 	scientific/7x/x86_64/os/isolinux/vmlinuz \
+ 	scientific/7x/x86_64/os/isolinux/initrd.img \
+@@ -40,6 +43,7 @@ SOURCES=\
+ 	$(shell cd ..; echo images/*) \
+ 	$(FEDORA) \
+ 	$(CENTOS) $(CENTOS_i386) \
++	$(ALMALINUX) \
+ 	$(SCIENTIFIC) \
+ 	$(PMAGIC) \
+ 	$(CLONEZILLA) \
+@@ -81,15 +85,18 @@ centos/%.sig:	$(FTP)/centos/%
+ NOSIG=$(@:.sig=)
+ centos/7/os/i386/isolinux/%.sig:
+ 	@mkdir -p `dirname $@`
+-	wget -O $(NOSIG) http://mirror.centos.org/altarch`echo $(NOSIG) | sed 's/^centos//'`
+-	$(SIGN) -in $(NOSIG) -out $@
+-	rm -f $(NOSIG)
++	curl http://mirror.centos.org/altarch`echo $(NOSIG) | sed 's/^centos//'` \
++	  | $(SIGN) -in - -out $@
++
++almalinux/%.sig:
++	@mkdir -p `dirname $@`
++	curl https://repo.almalinux.org/$(NOSIG) \
++	  | $(SIGN) -in - -out $@
+ 
+ scientific/%.sig:
+ 	@mkdir -p `dirname $@`
+-	wget -O $(NOSIG) http://ftp.scientificlinux.org/linux/$(NOSIG)
+-	$(SIGN) -in $(NOSIG) -out $@
+-	rm -f $(NOSIG)
++	curl http://ftp.scientificlinux.org/linux/$(NOSIG) \
++	  | $(SIGN) -in - -out $@
+ 
+ mirrors/%.sig:	$(FTP)/mirrors/%
+ 	@mkdir -p `dirname $@`
+
+From 056c8d933728be50a2cd648c83bffc71af1df2bf Mon Sep 17 00:00:00 2001
+From: "Jan ONDREJ (SAL)" <ondrejj(at)salstar.sk>
+Date: Sun, 9 May 2021 06:55:17 +0200
+Subject: [PATCH] Fedora 34 added. Added rockylinux beta. Ubuntu update (still
+ not working for new ubuntu releases). GParted update. Tails update. Live
+ packages updated.
+
+---
+ sigs/Makefile | 9 +++++++++
+ 1 file changed, 9 insertions(+)
+
+diff --git a/sigs/Makefile b/sigs/Makefile
+index 1554b8b71a78931c9c0ec6b6f8ebae70d8f1a0a0..da2bf636df7bf642a5efdacfafe62ea013f72afb 100644
+--- a/sigs/Makefile
++++ b/sigs/Makefile
+@@ -24,6 +24,9 @@ CENTOS_i386=\
+ ALMALINUX=\
+ 	almalinux/8/BaseOS/x86_64/os/isolinux/vmlinuz \
+ 	almalinux/8/BaseOS/x86_64/os/isolinux/initrd.img
++ROCKYLINUX=\
++	rocky/8.3/BaseOS/x86_64/os/isolinux/vmlinuz \
++	rocky/8.3/BaseOS/x86_64/os/isolinux/initrd.img
+ SCIENTIFIC=\
+ 	scientific/7x/x86_64/os/isolinux/vmlinuz \
+ 	scientific/7x/x86_64/os/isolinux/initrd.img \
+@@ -44,6 +47,7 @@ SOURCES=\
+ 	$(FEDORA) \
+ 	$(CENTOS) $(CENTOS_i386) \
+ 	$(ALMALINUX) \
++	$(ROCKYLINUX) \
+ 	$(SCIENTIFIC) \
+ 	$(PMAGIC) \
+ 	$(CLONEZILLA) \
+@@ -93,6 +97,11 @@ almalinux/%.sig:
+ 	curl https://repo.almalinux.org/$(NOSIG) \
+ 	  | $(SIGN) -in - -out $@
+ 
++rocky/%.sig:
++	@mkdir -p `dirname $@`
++	curl https://download.rockylinux.org/pub/$(NOSIG) \
++	  | $(SIGN) -in - -out $@
++
+ scientific/%.sig:
+ 	@mkdir -p `dirname $@`
+ 	curl http://ftp.scientificlinux.org/linux/$(NOSIG) \
+
+From 5669c05a1e361e2d5898b04a591f802934690813 Mon Sep 17 00:00:00 2001
+From: "Jan ONDREJ (SAL)" <ondrejj(at)salstar.sk>
+Date: Wed, 8 Sep 2021 12:26:06 +0200
+Subject: [PATCH] Various OS release version updates.
+
+---
+ sigs/Makefile | 4 ++--
+ 1 file changed, 2 insertions(+), 2 deletions(-)
+
+diff --git a/sigs/Makefile b/sigs/Makefile
+index da2bf636df7bf642a5efdacfafe62ea013f72afb..6e25c7af626805d65a2b20a6223dd261d365c2bd 100644
+--- a/sigs/Makefile
++++ b/sigs/Makefile
+@@ -25,8 +25,8 @@ ALMALINUX=\
+ 	almalinux/8/BaseOS/x86_64/os/isolinux/vmlinuz \
+ 	almalinux/8/BaseOS/x86_64/os/isolinux/initrd.img
+ ROCKYLINUX=\
+-	rocky/8.3/BaseOS/x86_64/os/isolinux/vmlinuz \
+-	rocky/8.3/BaseOS/x86_64/os/isolinux/initrd.img
++	rocky/8/BaseOS/x86_64/os/isolinux/vmlinuz \
++	rocky/8/BaseOS/x86_64/os/isolinux/initrd.img
+ SCIENTIFIC=\
+ 	scientific/7x/x86_64/os/isolinux/vmlinuz \
+ 	scientific/7x/x86_64/os/isolinux/initrd.img \
+
+From 36fee6e1b65e90fbd5879c2ac654f7fba78feebf Mon Sep 17 00:00:00 2001
+From: "Jan ONDREJ (SAL)" <ondrejj(at)salstar.sk>
+Date: Fri, 12 Nov 2021 09:42:25 +0100
+Subject: [PATCH] Change default testing CPU to Skylake. Cleanup ks script.
+ Added AlmaLinux into predefined systems.
+
+---
+ sigs/Makefile | 8 +++++++-
+ 1 file changed, 7 insertions(+), 1 deletion(-)
+
+diff --git a/sigs/Makefile b/sigs/Makefile
+index 6e25c7af626805d65a2b20a6223dd261d365c2bd..ccdb941bb6e3b6670bf0092e3c56b8631e0e4bfe 100644
+--- a/sigs/Makefile
++++ b/sigs/Makefile
+@@ -41,7 +41,7 @@ FREEDOS=$(shell cd $(FTP); find mirrors/images -type f)
+ SOURCES=\
+ 	$(IPXE) $(IPXEBIN) \
+ 	memdisk \
+-	pxelinux.0 \
++	pxelinux.0 pxelinux.cfg/pxelinux.0 pxelinux.cfg/lpxelinux.0 \
+ 	memtest.0 \
+ 	$(shell cd ..; echo images/*) \
+ 	$(FEDORA) \
+@@ -117,6 +117,12 @@ memdisk.sig:	../memdisk
+ pxelinux.0.sig:	../pxelinux.0
+ 	$(SIGN) -in $< -out $@
+ 
++pxelinux.cfg/pxelinux.0.sig:	../pxelinux.cfg/pxelinux.0
++	$(SIGN) -in $< -out $@
++
++pxelinux.cfg/lpxelinux.0.sig:	../pxelinux.cfg/lpxelinux.0
++	$(SIGN) -in $< -out $@
++
+ memtest.0.sig:	../images/memtest.0
+ 	$(SIGN) -in $< -out $@
+ 
+
+From d38b0187df76c083a1f68526b2940b8d5647748b Mon Sep 17 00:00:00 2001
+From: "Jan ONDREJ (SAL)" <ondrejj(at)salstar.sk>
+Date: Mon, 15 Nov 2021 06:21:30 +0100
+Subject: [PATCH] Use inst.rescue instead of rescue for Fedora/CentOS. New
+ crypted password hash. Fix static network configuration. AlmaLinux signature
+ from local mirror.
+
+---
+ sigs/Makefile | 6 +++---
+ 1 file changed, 3 insertions(+), 3 deletions(-)
+
+diff --git a/sigs/Makefile b/sigs/Makefile
+index ccdb941bb6e3b6670bf0092e3c56b8631e0e4bfe..522f5d46e77f92d43a98797e8845a2c023bc1289 100644
+--- a/sigs/Makefile
++++ b/sigs/Makefile
+@@ -92,10 +92,10 @@ centos/7/os/i386/isolinux/%.sig:
+ 	curl http://mirror.centos.org/altarch`echo $(NOSIG) | sed 's/^centos//'` \
+ 	  | $(SIGN) -in - -out $@
+ 
+-almalinux/%.sig:
++almalinux/%.sig:	$(FTP)/mirrors/almalinux/%
+ 	@mkdir -p `dirname $@`
+-	curl https://repo.almalinux.org/$(NOSIG) \
+-	  | $(SIGN) -in - -out $@
++	#curl https://repo.almalinux.org/$(NOSIG) | $(SIGN) -in - -out $@
++	$(SIGN) -in $< -out $@
+ 
+ rocky/%.sig:
+ 	@mkdir -p `dirname $@`
+
+From 68d8a5212113bb775591630330aac5ccd2a79110 Mon Sep 17 00:00:00 2001
+From: "Jan ONDREJ (SAL)" <ondrejj(at)salstar.sk>
+Date: Sat, 11 Dec 2021 07:44:58 +0100
+Subject: [PATCH] Added CentOS 9 stream support. KaliLinux release update.
+
+---
+ sigs/Makefile | 10 +++++++++-
+ 1 file changed, 9 insertions(+), 1 deletion(-)
+
+diff --git a/sigs/Makefile b/sigs/Makefile
+index 522f5d46e77f92d43a98797e8845a2c023bc1289..eafbf3a5b4b20ed711287fdf332873e4e65e7ef7 100644
+--- a/sigs/Makefile
++++ b/sigs/Makefile
+@@ -18,6 +18,9 @@ CENTOS=$(shell cd $(FTP); ls -1 \
+           centos/*/BaseOS/*/os/isolinux/vmlinuz \
+           centos/*/BaseOS/*/os/isolinux/initrd.img \
+ 	)
++CENTOS9STREAM=\
++	centos-stream/9-stream/BaseOS/x86_64/os/isolinux/vmlinuz \
++        centos-stream/9-stream/BaseOS/x86_64/os/isolinux/initrd.img
+ CENTOS_i386=\
+ 	centos/7/os/i386/isolinux/vmlinuz \
+ 	centos/7/os/i386/isolinux/initrd.img
+@@ -45,7 +48,7 @@ SOURCES=\
+ 	memtest.0 \
+ 	$(shell cd ..; echo images/*) \
+ 	$(FEDORA) \
+-	$(CENTOS) $(CENTOS_i386) \
++	$(CENTOS) $(CENTOS9STREAM) $(CENTOS_i386) \
+ 	$(ALMALINUX) \
+ 	$(ROCKYLINUX) \
+ 	$(SCIENTIFIC) \
+@@ -92,6 +95,11 @@ centos/7/os/i386/isolinux/%.sig:
+ 	curl http://mirror.centos.org/altarch`echo $(NOSIG) | sed 's/^centos//'` \
+ 	  | $(SIGN) -in - -out $@
+ 
++centos-stream/9-stream/BaseOS/x86_64/os/isolinux/%.sig:
++	@mkdir -p `dirname $@`
++	curl http://mirror.stream.centos.org`echo $(NOSIG) | sed 's/^centos-stream//'` \
++	  | $(SIGN) -in - -out $@
++
+ almalinux/%.sig:	$(FTP)/mirrors/almalinux/%
+ 	@mkdir -p `dirname $@`
+ 	#curl https://repo.almalinux.org/$(NOSIG) | $(SIGN) -in - -out $@
+
+From 237ac272f5bf0030f3da8ec5f3742685ccedcc3c Mon Sep 17 00:00:00 2001
+From: "Jan ONDREJ (SAL)" <ondrejj(at)salstar.sk>
+Date: Sat, 11 Dec 2021 07:58:36 +0100
+Subject: [PATCH] Sign centos stream according to local mirror.
+
+---
+ sigs/Makefile | 7 ++++---
+ 1 file changed, 4 insertions(+), 3 deletions(-)
+
+diff --git a/sigs/Makefile b/sigs/Makefile
+index eafbf3a5b4b20ed711287fdf332873e4e65e7ef7..e9fcc2930ebee61233d6008907067d8d959e9b18 100644
+--- a/sigs/Makefile
++++ b/sigs/Makefile
+@@ -95,10 +95,11 @@ centos/7/os/i386/isolinux/%.sig:
+ 	curl http://mirror.centos.org/altarch`echo $(NOSIG) | sed 's/^centos//'` \
+ 	  | $(SIGN) -in - -out $@
+ 
+-centos-stream/9-stream/BaseOS/x86_64/os/isolinux/%.sig:
++centos-stream/%.sig:	$(FTP)/mirrors/centos-stream/%
+ 	@mkdir -p `dirname $@`
+-	curl http://mirror.stream.centos.org`echo $(NOSIG) | sed 's/^centos-stream//'` \
+-	  | $(SIGN) -in - -out $@
++	$(SIGN) -in $< -out $@
++	#curl http://mirror.stream.centos.org`echo $(NOSIG) | sed 's/^centos-stream//'` \
++	#  | $(SIGN) -in - -out $@
+ 
+ almalinux/%.sig:	$(FTP)/mirrors/almalinux/%
+ 	@mkdir -p `dirname $@`
+
+From 04fe6f8b598e675c0082cc03a05fb26e48798dec Mon Sep 17 00:00:00 2001
+From: "Jan ONDREJ (SAL)" <ondrejj(at)salstar.sk>
+Date: Tue, 1 Feb 2022 16:36:56 +0100
+Subject: [PATCH] CentOS 8 has been moved to vault.
+
+---
+ sigs/Makefile | 9 ++++++++-
+ 1 file changed, 8 insertions(+), 1 deletion(-)
+
+diff --git a/sigs/Makefile b/sigs/Makefile
+index e9fcc2930ebee61233d6008907067d8d959e9b18..4577b2db52691d55701a442f00669b212b91ccc0 100644
+--- a/sigs/Makefile
++++ b/sigs/Makefile
+@@ -18,6 +18,9 @@ CENTOS=$(shell cd $(FTP); ls -1 \
+           centos/*/BaseOS/*/os/isolinux/vmlinuz \
+           centos/*/BaseOS/*/os/isolinux/initrd.img \
+ 	)
++CENTOS8=\
++	centos-vault/8/BaseOS/x86_64/os/isolinux/vmlinuz \
++	centos-vault/8/BaseOS/x86_64/os/isolinux/initrd.img
+ CENTOS9STREAM=\
+ 	centos-stream/9-stream/BaseOS/x86_64/os/isolinux/vmlinuz \
+         centos-stream/9-stream/BaseOS/x86_64/os/isolinux/initrd.img
+@@ -48,7 +51,7 @@ SOURCES=\
+ 	memtest.0 \
+ 	$(shell cd ..; echo images/*) \
+ 	$(FEDORA) \
+-	$(CENTOS) $(CENTOS9STREAM) $(CENTOS_i386) \
++	$(CENTOS) $(CENTOS9STREAM) $(CENTOS8) $(CENTOS_i386) \
+ 	$(ALMALINUX) \
+ 	$(ROCKYLINUX) \
+ 	$(SCIENTIFIC) \
+@@ -101,6 +104,10 @@ centos-stream/%.sig:	$(FTP)/mirrors/centos-stream/%
+ 	#curl http://mirror.stream.centos.org`echo $(NOSIG) | sed 's/^centos-stream//'` \
+ 	#  | $(SIGN) -in - -out $@
+ 
++centos-vault/%.sig:	$(FTP)/mirrors/centos-vault/%
++	@mkdir -p `dirname $@`
++	$(SIGN) -in $< -out $@
++
+ almalinux/%.sig:	$(FTP)/mirrors/almalinux/%
+ 	@mkdir -p `dirname $@`
+ 	#curl https://repo.almalinux.org/$(NOSIG) | $(SIGN) -in - -out $@
+
+From dd483f95de6756e8e3fb91070f2b746d94347d58 Mon Sep 17 00:00:00 2001
+From: "Jan ONDREJ (SAL)" <ondrejj(at)salstar.sk>
+Date: Sun, 27 Feb 2022 08:51:37 +0100
+Subject: [PATCH] Because memtest86+ doesn't work in EFI mode, PCMemTest has
+ been added.
+
+---
+ sigs/Makefile | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/sigs/Makefile b/sigs/Makefile
+index 4577b2db52691d55701a442f00669b212b91ccc0..cdbfc6067252faf0049c66dfdeef6cd709e49770 100644
+--- a/sigs/Makefile
++++ b/sigs/Makefile
+@@ -49,7 +49,7 @@ SOURCES=\
+ 	memdisk \
+ 	pxelinux.0 pxelinux.cfg/pxelinux.0 pxelinux.cfg/lpxelinux.0 \
+ 	memtest.0 \
+-	$(shell cd ..; echo images/*) \
++	$(shell cd ..; echo images/*.* images/pcmemtest/*) \
+ 	$(FEDORA) \
+ 	$(CENTOS) $(CENTOS9STREAM) $(CENTOS8) $(CENTOS_i386) \
+ 	$(ALMALINUX) \
+
+From 3fa67d17cde1fe5108b7e9237279a55ac4ddb4a6 Mon Sep 17 00:00:00 2001
+From: "Jan ONDREJ (SAL)" <ondrejj(at)salstar.sk>
+Date: Sun, 5 Jun 2022 09:29:25 +0200
+Subject: [PATCH] OS updates. AlmaLinux 9 auto added.
+
+---
+ sigs/Makefile | 9 +++++----
+ 1 file changed, 5 insertions(+), 4 deletions(-)
+
+diff --git a/sigs/Makefile b/sigs/Makefile
+index cdbfc6067252faf0049c66dfdeef6cd709e49770..0f4a066271485d1c0d4ccaad0ede034cfa2fa0a3 100644
+--- a/sigs/Makefile
++++ b/sigs/Makefile
+@@ -27,9 +27,10 @@ CENTOS9STREAM=\
+ CENTOS_i386=\
+ 	centos/7/os/i386/isolinux/vmlinuz \
+ 	centos/7/os/i386/isolinux/initrd.img
+-ALMALINUX=\
+-	almalinux/8/BaseOS/x86_64/os/isolinux/vmlinuz \
+-	almalinux/8/BaseOS/x86_64/os/isolinux/initrd.img
++ALMALINUX=$(shell cd $(FTP)/mirrors; ls -1 \
++	almalinux/*/BaseOS/x86_64/os/isolinux/vmlinuz \
++	almalinux/*/BaseOS/x86_64/os/isolinux/initrd.img \
++	)
+ ROCKYLINUX=\
+ 	rocky/8/BaseOS/x86_64/os/isolinux/vmlinuz \
+ 	rocky/8/BaseOS/x86_64/os/isolinux/initrd.img
+@@ -98,7 +99,7 @@ centos/7/os/i386/isolinux/%.sig:
+ 	curl http://mirror.centos.org/altarch`echo $(NOSIG) | sed 's/^centos//'` \
+ 	  | $(SIGN) -in - -out $@
+ 
+-centos-stream/%.sig:	$(FTP)/mirrors/centos-stream/%
++centos-stream/%.sig:	$(FTP)/centos-stream/%
+ 	@mkdir -p `dirname $@`
+ 	$(SIGN) -in $< -out $@
+ 	#curl http://mirror.stream.centos.org`echo $(NOSIG) | sed 's/^centos-stream//'` \
+
+From 809e1d19a218202e8f1c54183c26609120132db9 Mon Sep 17 00:00:00 2001
+From: "Jan ONDREJ (SAL)" <ondrejj(at)salstar.sk>
+Date: Wed, 26 Oct 2022 14:35:52 +0200
+Subject: [PATCH] Memtest86+ update.
+
+---
+ sigs/Makefile | 3 +--
+ 1 file changed, 1 insertion(+), 2 deletions(-)
+
+diff --git a/sigs/Makefile b/sigs/Makefile
+index 0f4a066271485d1c0d4ccaad0ede034cfa2fa0a3..1b82a3ed0ae22e7bb538f63ec9122089c5c354d4 100644
+--- a/sigs/Makefile
++++ b/sigs/Makefile
+@@ -49,8 +49,7 @@ SOURCES=\
+ 	$(IPXE) $(IPXEBIN) \
+ 	memdisk \
+ 	pxelinux.0 pxelinux.cfg/pxelinux.0 pxelinux.cfg/lpxelinux.0 \
+-	memtest.0 \
+-	$(shell cd ..; echo images/*.* images/pcmemtest/*) \
++	$(shell cd ..; echo images/*.* images/pcmemtest/* images/mt86plus/*) \
+ 	$(FEDORA) \
+ 	$(CENTOS) $(CENTOS9STREAM) $(CENTOS8) $(CENTOS_i386) \
+ 	$(ALMALINUX) \
+
+From 95fbda2dfc45ce9b42210e8ab52c4d2dccc0fd3f Mon Sep 17 00:00:00 2001
+From: "Jan ONDREJ (SAL)" <ondrejj(at)salstar.sk>
+Date: Thu, 24 Nov 2022 07:41:08 +0100
+Subject: [PATCH] Update Fedora to 37 Update Tails to 5.7
+
+---
+ sigs/Makefile | 30 +++++++++++++++++++-----------
+ 1 file changed, 19 insertions(+), 11 deletions(-)
+
+diff --git a/sigs/Makefile b/sigs/Makefile
+index 1b82a3ed0ae22e7bb538f63ec9122089c5c354d4..ae0f6b04e8270794afd6c0b89d87e4602a29eb5b 100644
+--- a/sigs/Makefile
++++ b/sigs/Makefile
+@@ -15,25 +15,32 @@ FEDORA=$(shell cd $(FTP); ls -1 \
+ CENTOS=$(shell cd $(FTP); ls -1 \
+ 	  centos/*/os/*/isolinux/vmlinuz \
+           centos/*/os/*/isolinux/initrd.img \
+-          centos/*/BaseOS/*/os/isolinux/vmlinuz \
+-          centos/*/BaseOS/*/os/isolinux/initrd.img \
++	  centos/*/os/*/images/pxeboot/vmlinuz \
++          centos/*/os/*/images/pxeboot/initrd.img \
++          centos*/*/BaseOS/*/os/isolinux/vmlinuz \
++          centos*/*/BaseOS/*/os/isolinux/initrd.img \
++          centos*/*/BaseOS/*/os/images/pxeboot/vmlinuz \
++          centos*/*/BaseOS/*/os/images/pxeboot/initrd.img \
+ 	)
+-CENTOS8=\
++CENTOS_VAULT=\
+ 	centos-vault/8/BaseOS/x86_64/os/isolinux/vmlinuz \
+-	centos-vault/8/BaseOS/x86_64/os/isolinux/initrd.img
+-CENTOS9STREAM=\
+-	centos-stream/9-stream/BaseOS/x86_64/os/isolinux/vmlinuz \
+-        centos-stream/9-stream/BaseOS/x86_64/os/isolinux/initrd.img
++	centos-vault/8/BaseOS/x86_64/os/isolinux/initrd.img \
++	centos-vault/8/BaseOS/x86_64/os/images/pxeboot/vmlinuz \
++	centos-vault/8/BaseOS/x86_64/os/images/pxeboot/initrd.img
+ CENTOS_i386=\
+ 	centos/7/os/i386/isolinux/vmlinuz \
+ 	centos/7/os/i386/isolinux/initrd.img
+ ALMALINUX=$(shell cd $(FTP)/mirrors; ls -1 \
+ 	almalinux/*/BaseOS/x86_64/os/isolinux/vmlinuz \
+ 	almalinux/*/BaseOS/x86_64/os/isolinux/initrd.img \
++	almalinux/*/BaseOS/x86_64/os/images/pxeboot/vmlinuz \
++	almalinux/*/BaseOS/x86_64/os/images/pxeboot/initrd.img \
+ 	)
+ ROCKYLINUX=\
+ 	rocky/8/BaseOS/x86_64/os/isolinux/vmlinuz \
+-	rocky/8/BaseOS/x86_64/os/isolinux/initrd.img
++	rocky/8/BaseOS/x86_64/os/isolinux/initrd.img \
++	rocky/8/BaseOS/x86_64/os/images/pxeboot/vmlinuz \
++	rocky/8/BaseOS/x86_64/os/images/pxeboot/initrd.img
+ SCIENTIFIC=\
+ 	scientific/7x/x86_64/os/isolinux/vmlinuz \
+ 	scientific/7x/x86_64/os/isolinux/initrd.img \
+@@ -51,7 +58,7 @@ SOURCES=\
+ 	pxelinux.0 pxelinux.cfg/pxelinux.0 pxelinux.cfg/lpxelinux.0 \
+ 	$(shell cd ..; echo images/*.* images/pcmemtest/* images/mt86plus/*) \
+ 	$(FEDORA) \
+-	$(CENTOS) $(CENTOS9STREAM) $(CENTOS8) $(CENTOS_i386) \
++	$(CENTOS) $(CENTOS_VAULT) $(CENTOS_i386) \
+ 	$(ALMALINUX) \
+ 	$(ROCKYLINUX) \
+ 	$(SCIENTIFIC) \
+@@ -81,7 +88,7 @@ bsd/%.ipxe.sig:	../bsd/%.ipxe
+ 	$(SIGN) -in $< -out $@
+ 
+ images/%.sig:	../images/%
+-	@mkdir -p images
++	@mkdir -p `dirname $@`
+ 	$(SIGN) -in $< -out $@
+ 
+ fedora/%.sig:	$(FTP)/fedora/%
+@@ -99,7 +106,8 @@ centos/7/os/i386/isolinux/%.sig:
+ 	  | $(SIGN) -in - -out $@
+ 
+ centos-stream/%.sig:	$(FTP)/centos-stream/%
+-	@mkdir -p `dirname $@`
++	# centos-stream is a link to centos, create centos directory first
++	@mkdir -p centos `dirname $@`
+ 	$(SIGN) -in $< -out $@
+ 	#curl http://mirror.stream.centos.org`echo $(NOSIG) | sed 's/^centos-stream//'` \
+ 	#  | $(SIGN) -in - -out $@
+
+From b81fa5f04fe3bdff1ae77b40563584378b49b584 Mon Sep 17 00:00:00 2001
+From: "Jan ONDREJ (SAL)" <ondrejj(at)salstar.sk>
+Date: Mon, 28 Nov 2022 09:38:52 +0100
+Subject: [PATCH] Added RockyLinux 9 support (signatures).
+
+---
+ sigs/Makefile | 4 ++++
+ 1 file changed, 4 insertions(+)
+
+diff --git a/sigs/Makefile b/sigs/Makefile
+index ae0f6b04e8270794afd6c0b89d87e4602a29eb5b..46c1cec6ef033b83d12289c7b0927815c44c6fd7 100644
+--- a/sigs/Makefile
++++ b/sigs/Makefile
+@@ -37,6 +37,10 @@ ALMALINUX=$(shell cd $(FTP)/mirrors; ls -1 \
+ 	almalinux/*/BaseOS/x86_64/os/images/pxeboot/initrd.img \
+ 	)
+ ROCKYLINUX=\
++	rocky/9/BaseOS/x86_64/os/isolinux/vmlinuz \
++	rocky/9/BaseOS/x86_64/os/isolinux/initrd.img \
++	rocky/9/BaseOS/x86_64/os/images/pxeboot/vmlinuz \
++	rocky/9/BaseOS/x86_64/os/images/pxeboot/initrd.img \
+ 	rocky/8/BaseOS/x86_64/os/isolinux/vmlinuz \
+ 	rocky/8/BaseOS/x86_64/os/isolinux/initrd.img \
+ 	rocky/8/BaseOS/x86_64/os/images/pxeboot/vmlinuz \
+
+From 07322f5ac2a6f2dd93daf2c8265e33b84a540b8f Mon Sep 17 00:00:00 2001
+From: "Jan ONDREJ (SAL)" <ondrejj(at)salstar.sk>
+Date: Wed, 8 Feb 2023 10:35:25 +0100
+Subject: [PATCH] Added memtest86+ 6.10.
+
+---
+ sigs/Makefile | 3 ++-
+ 1 file changed, 2 insertions(+), 1 deletion(-)
+
+diff --git a/sigs/Makefile b/sigs/Makefile
+index 46c1cec6ef033b83d12289c7b0927815c44c6fd7..eae567848c92286c4a7e4e4703f0efe714fdfa16 100644
+--- a/sigs/Makefile
++++ b/sigs/Makefile
+@@ -60,7 +60,8 @@ SOURCES=\
+ 	$(IPXE) $(IPXEBIN) \
+ 	memdisk \
+ 	pxelinux.0 pxelinux.cfg/pxelinux.0 pxelinux.cfg/lpxelinux.0 \
+-	$(shell cd ..; echo images/*.* images/pcmemtest/* images/mt86plus/*) \
++	$(shell cd ..; echo images/*.* images/pcmemtest/* \
++		images/mt86plus/*.* images/mt86plus/*/*/*) \
+ 	$(FEDORA) \
+ 	$(CENTOS) $(CENTOS_VAULT) $(CENTOS_i386) \
+ 	$(ALMALINUX) \

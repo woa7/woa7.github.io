@@ -1,0 +1,177 @@
+#!ipxe
+
+set country sk
+
+goto ${menu} ||
+menu Debian or Ubuntu ?
+item --key d debian Debian [d]
+item --key u ubuntu Ubuntu [u]
+choose menu || goto deb_exit
+goto ${menu}
+
+:debian
+iseq ${mirror} ${default_mirror} && set debmirror http://ftp.${country}.debian.org/debian/ || set debmirror ${mirror}
+
+set os Debian
+set os_lower debian
+menu ${os} ${arch_a}
+# https://wiki.debian.org/DebianReleases
+item --key 1 bullseye ${os} 11 bullseye (stable) [1]
+item --gap Long Term Support (LTS)
+item --key 0 buster ${os} 10 buster (oldstable) [0]
+item --gap End of life (unsupported)
+item --key 9 stretch ${os} 9 stretch [9]
+item --key 8 jessie ${os} 8 jessie [8]
+item --key 7 wheezy ${os} 7 wheezy [7]
+#item --key 6 squeeze ${os} 6.0 squeeze [6]
+item --gap Testing and development
+item --key t bookworm ${os} bookworm (testing) [t]
+item --key u sid ${os} sid (unstable) [u]
+choose ver || goto deb_exit
+#set ver_alias ${ver}
+#iseq ${ver} wheezy && set ver_alias stable ||
+#iseq ${ver} squeeze && set ver_alias oldstable ||
+goto deb_boot_type
+
+:ubuntu
+#set debmirror http://ftp.ubuntu.com/ubuntu/
+iseq ${mirror} ${default_mirror} && set debmirror http://${country}.archive.ubuntu.com/ubuntu/ || set debmirror ${mirror}
+
+set os Ubuntu
+set os_lower ubuntu
+menu ${os} ${arch_a}
+# https://wiki.ubuntu.com/Releases
+item --gap Current (supported)
+# Ubuntu 20.10+ doesn't support legacy-installer, so unable to use it
+# with all features from boot.salstar.sk. :-(
+item --key k kinetic ${os} 22.10 Kinetic Kudu [k]
+item --key j jammy ${os} 22.04 LTS Jammy Jellyfish [j]
+item --key f focal ${os} 20.04 LTS Focal Fossa [f]
+item --key b bionic ${os} 18.04 LTS Bionic Beaver [b]
+item --key x xenial ${os} 16.04 LTS Xenial Xerus [x]
+item --key t trusty ${os} 14.04 LTS Trusty Tahr [t]
+item --gap End of life (unsupported)
+item impish ${os} 21.10 Impish Indri
+item hirsute ${os} 21.04 Hirsute Hippo
+item groovy ${os} 20.10 Groovy Gorilla
+item eoan ${os} 19.10 Eoan Ermine
+item --gap Other versions
+item --key D devel Future version (development) [D]
+item --key o other Choose other version [o]
+choose ver || goto deb_exit
+
+iseq ${ver} other || goto skip_read_ver
+echo ${cls}
+set ver
+echo -n Enter version: ${} && read ver
+:skip_read_ver
+
+:deb_boot_type
+set diru dists/${ver}-updates/main/installer-${arch_a}/current/images/netboot/
+set dirl dists/${ver}/main/installer-${arch_a}/current/legacy-images/netboot/
+set dir dists/${ver}/main/installer-${arch_a}/current/images/netboot/
+
+menu ${os} ${ver} boot parameters
+item --key i install ${os} install [i]
+item --key g gtk ${os} graphical install [g]
+item --key a automated ${os} automated install [a]
+iseq os Debian && item --key k kickstart ${os} kickstart install [k] ||
+item --key c rescue ${os} rescue mode [c]
+item --key e expert ${os} expert install [e]
+item --key l live ${os} live boot [l]
+# desktop selection for Debian only
+iseq ${menu} debian && item --key d desktop ${os} desktop selection [d] ||
+item --key p pxe ${os} pxelinux boot [p]
+choose --default ${type} type || goto deb_exit
+
+echo ${cls}
+goto deb_${type}
+
+:deb_desktop
+menu ${os} desktop selection
+item default Default
+item kde KDE
+item lxde LXDE
+item xfce XFCE
+choose --default ${desktop} desktop || goto deb_boot_type
+iseq ${desktop} default && clear desktop_param || set desktop_param desktop=${desktop}
+goto deb_boot_type
+
+:deb_rescue
+set install_params rescue/enable=true
+goto deb_boot
+
+:deb_automated
+set install_params auto=true priority=critical url=http://www.salstar.sk/boot/ks/deb/${os_lower}_preseed
+goto deb_boot
+
+:deb_expert
+set install_params priority=low
+goto deb_boot
+
+:deb_gtk
+set install_params video=vesa:ywrap,mtrr vga=788
+iseq ${ver} precise && set installer gtk/ ||
+goto deb_boot
+
+:deb_kickstart
+set install_params ks=http://boot.salstar.sk/ks/ubuntu
+goto deb_boot
+
+:deb_install
+:deb_boot
+set diru ${diru}${installer}${menu}-installer/${arch_a}/
+set dirl ${dirl}${installer}${menu}-installer/${arch_a}/
+set dir ${dir}${installer}${menu}-installer/${arch_a}/
+imgfree
+imgtrust --allow
+echo Boot parameters: ${install_params} ${desktop_param} -- quiet ${params}
+# fallback to non-updates dir
+set all_params ${install_params} ${desktop_param} -- quiet ${params}
+kernel ${debmirror}${dirl}linux || kernel ${debmirror}${diru}linux ${all_params} || kernel ${debmirror}${dir}linux
+initrd ${debmirror}${dirl}initrd.gz || initrd ${debmirror}${diru}initrd.gz || initrd ${debmirror}${dir}initrd.gz
+imgargs linux initrd=initrd.gz ${all_params}
+boot
+
+:deb_pxe
+set 209:string pxelinux.cfg/default
+set 210:string ${debmirror}${dir}
+
+imgfree
+kernel ${url}pxelinux.0 ${params}
+imgverify pxelinux.0 ${sigs}pxelinux.0.sig
+boot
+
+:deb_live
+menu ${os} desktop selection
+item --key g gnome-desktop GNOME [g]
+item --key k kde-desktop KDE [k]
+item --key l lxde-desktop LXDE [l]
+item --key x xfce-desktop XFCE [x]
+item --key r rescue Rescue [r]
+item --key s standard Standard [s]
+choose desktop || goto deb_exit
+
+nslookup host cdimage.debian.org
+set url http://${host}/debian-cd/current-live/${arch_a}/webboot
+#iseq ${ver_alias} stable && set ver_number 7.6.0 ||
+#iseq ${ver_alias} oldstable && set ver_number 6.0.10 ||
+# only latest version available :-(
+set ver_number 8.8.0
+echo Check debian-live version on this URL:
+echo ${}  ${url}
+echo -n Enter version: ${}
+read ver_number
+#nslookup host live.debian.net
+#set url http://${host}/cdimage/release/${ver_alias}/${arch_a}/web
+set deblive ${url}/debian-live-${ver_number}-${arch_a}-${desktop}
+imgfree
+imgtrust --allow
+kernel ${deblive}.vmlinuz
+initrd ${deblive}.initrd.img
+imgargs ${deblive}.vmlinuz initrd=${deblive}.initrd.img boot=live components fetch=${deblive}.squashfs live-config ${params}
+
+boot
+
+:deb_exit
+exit 0

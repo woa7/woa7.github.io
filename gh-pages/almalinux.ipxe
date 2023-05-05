@@ -1,0 +1,12 @@
+#!ipxe
+
+#set mirror https://repo.almalinux.org
+set mirror http://ftp.upjs.sk/pub/mirrors
+
+set params ${params} ${mirror}
+
+set menu almalinux
+set os AlmaLinux
+imgverify fedora.ipxe ${sigs}fedora.ipxe.sig
+chain fedora.ipxe
+exit

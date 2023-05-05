@@ -1,0 +1,18 @@
+#!ipxe
+
+# Tails linux. This is for testing only.
+
+set ver 5.11
+set isofile stable/tails-amd64-${ver}/tails-amd64-${ver}.img 
+iseq ${mirror} ${default_mirror} && set mirror http://dl.amnesia.boum.org/tails ||
+set iso ${mirror}/${isofile}
+
+echo ${iso}
+
+#sanboot ${iso} || echo Trying memdisk method.
+
+imgtrust --allow
+kernel ${url}memdisk iso raw ${params}
+imgverify memdisk ${sigs}memdisk.sig
+initrd ${iso}
+boot

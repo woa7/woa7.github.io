@@ -1,0 +1,8 @@
+#!ipxe
+
+set project rescatux.berlios
+set iso rescatux_cdrom_usb_hybrid_i386_486-amd64_0.30b5_sg2d.iso
+set sfboot memdisk
+
+imgverify sourceforge.ipxe ${sigs}sourceforge.ipxe.sig
+chain sourceforge.ipxe

@@ -1,0 +1,18 @@
+#!ipxe
+
+# This is an template file only.
+
+set ver 1
+set isofile template-${ver}/template-${ver}-amd64.iso
+iseq ${mirror} ${default_mirror} && set mirror http://........ ||
+set iso ${mirror}/${isofile}
+
+echo ${iso}
+
+#sanboot ${iso} || echo Trying memdisk method.
+
+imgtrust --allow
+kernel ${url}memdisk iso raw ${params}
+imgverify memdisk ${sigs}memdisk.sig
+initrd ${iso}
+boot

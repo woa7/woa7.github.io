@@ -1,0 +1,41 @@
+#!ipxe
+
+# TinyCoreLinux
+# http://distro.ibiblio.org/tinycorelinux/downloads.html
+
+#iseq ${mirror} ${default_mirror} &&
+set tc_mirror http://distro.ibiblio.org/tinycorelinux/ ||
+
+:tinycore_menu
+set os TinyCore
+menu ${os} version
+item 8.x ${os} 8.x
+item 7.x ${os} 7.x
+item 6.x ${os} 6.x
+item 5.x ${os} 5.x
+item 4.x ${os} 4.x
+item other ${os} Choose other version
+choose ver || exit 0
+
+iseq ${ver} other && echo -n ${cls}Enter version: ${} ||
+iseq ${ver} other && clear ver && read ver ||
+
+#iseq ${arch} x86_64 && set tinycore_arch x86_64 || set tinycore_arch x86
+# there is no TinyCore release for x86_64
+set tinycore_arch x86
+
+set dir ${ver}/${tinycore_arch}/release
+
+menu TinyCoreLinux
+item --key t TinyCore TinyCore (12 MB)
+item --key p CorePlus CorePlus (64 MB)
+item --key c Core Core (8 MB)
+choose vertype || goto exit 0
+
+echo ${cls}
+
+imgfree
+kernel ${url}memdisk iso raw ${params}
+imgverify memdisk ${sigs}memdisk.sig
+initrd ${tc_mirror}${dir}/${vertype}-current.iso
+boot

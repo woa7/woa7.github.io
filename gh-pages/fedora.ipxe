@@ -1,0 +1,287 @@
+#!ipxe
+
+# Fedora & CentOS & AlmaLinux & RockyLinux
+
+set ksurl https://www.salstar.sk/boot/ks/
+isset ksdevice || set ksdevice bootif
+
+goto ${menu} ||
+
+# OS
+:fedora
+set os Fedora
+set devel_ver 38
+menu Fedora
+item --gap Current (supported)
+item --key 7 37 ${space} ${os} 37 ${arch} [7]
+item --key 6 36 ${space} ${os} 36 ${arch} [6]
+item --gap End of life (unsupported)
+item 35 ${space} ${os} 35 ${arch}
+item 34 ${space} ${os} 34 ${arch}
+item 33 ${space} ${os} 33 ${arch}
+item 32 ${space} ${os} 32 ${arch}
+item 31 ${space} ${os} 31 ${arch}
+item 30 ${space} ${os} 30 ${arch}
+item 29 ${space} ${os} 29 ${arch}
+item --gap Testing and development
+item --key r rawhide ${space} ${os} rawhide ${arch} [r]
+item --key d development ${space} ${os} development ${arch} [d]
+item --key b Beta ${space} ${os} ${devel_ver}_Beta ${arch} [b]
+item --key a Alpha ${space} ${os} ${devel_ver}_Aplha ${arch} [a]
+item --key A alt_stage ${space} ${os} dl.fedoraproject.org/pub/alt/stage ${arch} [A]
+item --gap Change ${space} ${os} mirror
+item mirror_linux_cz ${space} Use ftp.linux.cz as mirror server
+item --gap Official netboot
+item --key f fedoraproject ${space} ${os} boot.fedoraproject.org [f]
+isset ${ver} || choose ver || goto main_menu
+iseq ${ver} mirror_linux_cz && goto mirror_linux_cz ||
+
+# force to Server, other products are not useful for network install
+isset ${fed_product} || set fed_product Server
+#menu Choose product
+#item --key s Server Server [s]
+#item --key c Everything Everything [e]
+#item --key w Workstation Workstation [w]
+#item --key c Cloud Cloud [c]
+#isset ${fed_product} || choose fed_product || goto main_menu
+#:fedora_product_end
+#isset ${fed_product} || set fed_product ${os}
+
+# workaround for fedora 17
+#iseq ${ver} 17 && set params rd.debug ${params} ||
+
+set bootdev inst.ks.device=${mac}
+
+goto fedora_${ver} ||
+set dir fedora/linux/releases/${ver}/${fed_product}/${arch}/os
+set repo inst.repo=${mirror}/${dir}
+:fedora_setvars
+#set osks ${ksurl}${ver}
+set osks ${ksurl}fedora
+goto boottype
+
+:fedora_development
+set dir fedora/linux/development/${devel_ver}/${fed_product}/${arch}/os
+set repo inst.repo=${mirror}/${dir}
+#set params root=live:${mirror}/${dir}/LiveOS/squashfs.img ${params}
+goto fedora_setvars
+
+:fedora_rawhide
+set dir fedora/linux/development/rawhide/${fed_product}/${arch}/os
+set repo inst.repo=${mirror}/${dir}
+#set params root=live:${mirror}/${dir}/LiveOS/squashfs.img ${params}
+# signature checking is disabled for development version
+set ver development
+goto fedora_setvars
+
+:fedora_Alpha
+set ver ${devel_ver}_Alpha
+set dir fedora/linux/releases/test/${ver}/${fed_product}/${arch}/os
+set repo inst.repo=${mirror}/${dir}
+#set params root=live:${mirror}/${dir}/LiveOS/squashfs.img ${params}
+goto fedora_setvars
+
+:fedora_Beta
+set ver ${devel_ver}_Beta
+set dir fedora/linux/releases/test/${ver}/${fed_product}/${arch}/os
+set repo inst.repo=${mirror}/${dir}
+#set params root=live:${mirror}/${dir}/LiveOS/squashfs.img ${params}
+goto fedora_setvars
+
+:fedora_live
+set dir fedora/linux/releases/${ver}/Workstation/${arch}
+set img ${os}-Workstation-Live-${arch}-${ver}-1.2.iso
+prompt
+goto main_menu
+
+:fedora_alt_stage
+# point repo do development tree
+set dir fedora/linux/development/${devel_ver}/${arch}/os
+set repo inst.repo=${mirror}/${dir}
+# everything else to alt stage files
+iseq ${mirror} ${default_mirror} && set mirror http://ftp.upjs.sk/pub/mirrors/fedoraproject ||
+set stage_ver ${devel_ver}_Beta_RC1
+echo -n Edit stage version: ${} && read stage_ver
+set dir alt/stage/${stage_ver}/${fed_product}/${arch}/os
+set params root=live:${mirror}/${dir}/LiveOS/squashfs.img ${params}
+# signature checking is disabled for development ver
+set ver development
+goto fedora_setvars
+
+# change mirror
+:mirror_linux_cz
+set mirror http://ftp.linux.cz/pub/linux
+clear ver
+goto fedora
+
+# boot.fedoraproject.org online boot
+:fedora_fedoraproject
+echo ${cls}
+imgverify boot.fedoraproject.org.ipxe ${sigs}boot.fedoraproject.org.ipxe.sig
+chain boot.fedoraproject.org.ipxe
+exit
+
+:centos
+menu ${os}
+item --gap Current (supported):
+item --default --key 9 9-stream ${space} ${os} 9-stream ${arch} [9]
+item --key s 8-stream ${space} ${os} 8-stream ${arch} [s]
+item --key 8 8 ${space} ${os} 8 ${arch} [8]
+item --key 7 7 ${space} ${os} 7 ${arch} [7]
+item --gap End of life (unsupported):
+item --key 6 6 ${space} ${os} 6 ${arch} [6]
+item --gap Other:
+item --key o other ${space} Choose other version [o]
+item --key c bco ${space} boot.centos.org [c]
+goto centos_choose
+
+:almalinux
+:rocky
+menu ${os}
+item --gap Current (supported):
+item --default --key 9 9 ${space} ${os} 9 ${arch} [9]
+item --key 8 8 ${space} ${os} 8 ${arch} [8]
+#item --gap End of life (unsupported):
+item --gap Other:
+item --key o other ${space} Choose other version [o]
+
+:centos_choose
+isset ${ver} || choose ver || goto main_menu
+iseq ${ver} bco && goto boot_centos_org ||
+iseq ${ver} other || goto centos_skip_read_ver
+echo ${cls}
+echo -n Enter version: ${} && set ver && read ver
+imgtrust --allow
+:centos_skip_read_ver
+set dir ${menu}/${ver}/BaseOS/${arch}/os
+set repo inst.repo=${mirror}/${dir}
+set osks ${ksurl}centos${ver}
+set bootdev ksdevice=${ksdevice} BOOTIF=${mac}
+#set stream_mirror http://mirror.stream.centos.org
+set stream_mirror http://ftp.upjs.sk/pub/centos-stream
+#set vault_mirror https://vault.centos.org
+set vault_mirror http://linuxsoft.cern.ch/centos-vault
+# version specific settings
+goto elbased-${ver} || goto boottype
+
+:elbased-9-stream
+# change mirror for centos 9 stream
+iseq ${mirror} ${default_mirror} && set mirror ${stream_mirror} ||
+set dir ${ver}/BaseOS/${arch}/os
+set repo inst.repo=${mirror}/${dir}
+set sigs ${sigs}centos/
+goto boottype
+:elbased-8-stream
+goto boottype
+:elbased-9
+goto boottype
+:elbased-8
+iseq ${os} CentOS && iseq ${mirror} ${default_mirror} && set dir mirrors/centos-vault/${ver}/BaseOS/${arch}/os && set repo inst.repo=${mirror}/${dir} ||
+goto boottype
+:elbased-7
+# fix i386 mirror for CentOS 7
+iseq ${arch} i386 && iseq ${mirror} ${default_mirror} && set mirror http://mirror.centos.org/altarch ||
+set dir ${menu}/${ver}/os/${arch}
+set repo repo=${mirror}/${dir}
+goto boottype
+:elbased-6
+iseq ${mirror} ${default_mirror} && set mirror ${vault_mirror} ||
+set dir ${menu}/${ver}/os/${arch}
+set repo repo=${mirror}/${dir}
+goto boottype
+
+:boot_centos_org
+imgtrust --allow
+initrd http://boot.centos.org/bco/images/CentOS-BootService-ipxe.iso
+chain memdisk iso raw
+echo "Boot failed, press ENTER."
+read i
+exit
+
+:scientific
+set os Scientific Linux
+menu ${os}
+item --key 7 7 ${os} 7 ${arch} [7]
+item --key 6 6 ${os} 6 ${arch} [6]
+isset ${ver} || choose ver || goto main_menu
+set dir ${menu}/${ver}x/${arch}/os
+iseq ${ver} 5 && set dir ${menu}/${ver}x/${arch} ||
+set osks ${ksurl}centos${ver}
+set bootdev ksdevice=${ksdevice} BOOTIF=${mac}
+iseq ${mirror} ${default_mirror} && set mirror http://ftp.scientificlinux.org/linux ||
+goto boottype
+
+:boottype
+set ova ${os} ${ver} ${arch}
+menu ${os} boot type
+item --gap Install:
+item normal ${space} ${ova}
+item --key k ks ${space} ${ova} minimal server kickstart [k]
+item --gap Rescue:
+item --key r rescue ${space} ${ova} rescue [r]
+item --key s remote ${space} ${ova} rescue with sshd [s]
+item --gap ISO boot:
+item --key i isolinux ${space} ${ova} direct boot using isolinux [i]
+#item --gap Live boot:
+#item --key l live_desktop ${space} ${ova} Live Desktop [l] ||
+isset ${bt} || choose bt || goto main_menu
+echo ${cls}
+iseq ${bt} ks && set params ${bootdev} inst.ks=${osks} ${params} ||
+iseq ${bt} rescue && set params inst.rescue inst.ks=${ksurl}rescue ${params} ||
+iseq ${bt} remote && set params ${bootdev} inst.ks=${ksurl}rescue-sshd ${params} ||
+goto bootos_${bt} ||
+goto bootos_images
+
+:bootos_images
+set imgdir images/pxeboot
+echo Loading from ${mirror}/${dir}/${imgdir}/
+echo ${}  ${repo}
+echo ${}  ${params}
+imgfree
+# load vmlinuz and initrd
+kernel ${mirror}/${dir}/${imgdir}/vmlinuz
+iseq ${ver} development && imgtrust --allow ||
+iseq ${ver} development && goto bootos_images_skip_verify_vmlinuz ||
+imgverify vmlinuz ${sigs}${dir}/${imgdir}/vmlinuz.sig
+:bootos_images_skip_verify_vmlinuz
+initrd ${mirror}/${dir}/${imgdir}/initrd.img
+iseq ${ver} development && goto bootos_images_skip_verify_initrd ||
+imgverify initrd.img ${sigs}${dir}/${imgdir}/initrd.img.sig
+:bootos_images_skip_verify_initrd
+imgargs vmlinuz initrd=initrd.img ${repo} ${params}
+# use method= instead of repo= for CentOS 5
+#iseq ${ver} 5 && imgargs vmlinuz initrd=initrd.img method=${mirror}/${dir} ${params} ||
+imgstat
+isset ${debug} && prompt ||
+boot vmlinuz
+goto main_menu
+
+:bootos_isolinux
+echo Loading isolinux from ${mirror}/${dir}/isolinux/
+set 209:string isolinux.cfg
+set 210:string ${mirror}/${dir}/isolinux/
+imgfree
+imgload ${url}pxelinux.0
+imgverify pxelinux.0 ${sigs}pxelinux.0.sig
+boot
+goto main_menu
+
+:bootos_live_desktop
+set img ${os}-Workstation-Live-${arch}-${ver}-1.2.iso
+goto bootos_live
+
+:bootos_live
+set dir fedora/linux/releases/${ver}/Workstation/${arch}/iso
+set next-server 158.197.16.70
+set params ip=${ip}:${next-server}:${gateway}:${netmask} BOOTIF=${mac}
+echo params: ${params}
+echo WARNING: This does not really works!
+imgfree
+#kernel ${url}memdisk iso raw ${params}
+#initrd ${mirror}/${dir}/${img}
+echo ${mirror}/${dir}/${img}
+sanboot --no-describe ${mirror}/${dir}/${img}
+boot
+
+:main_menu
+exit 0

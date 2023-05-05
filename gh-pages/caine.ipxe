@@ -1,0 +1,15 @@
+#!ipxe
+
+# This does not really works, unable to boot.
+
+set project caine
+set version 10.0
+set iso http://caine.mirror.garr.it/mirrors/caine/caine${version}.iso
+
+imgfree
+imgtrust --allow
+
+kernel ${url}memdisk iso raw ${params}
+initrd ${iso}
+#sanboot --no-describe ${iso}
+boot

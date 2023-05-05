@@ -1,0 +1,57 @@
+#!ipxe
+
+# Commands to run this:
+#set project project_name
+#set iso iso_filename-${bits}.iso
+#set sfboot memdisk
+#set sfboot sanboot
+#imgverify sourceforge.ipxe ${sigs}sourceforge.ipxe.sig
+#chain sourceforge.ipxe
+
+#isset ${iso} && set sfurl http://sourceforge.net/projects/${project}/files/${iso}/download ||
+#isset ${img} && set sfurl http://sourceforge.net/projects/${project}/files/${img}/download ||
+isset ${iso} && set sfurl http://downloads.sourceforge.net/${project}/${iso} ||
+isset ${img} && set sfurl http://downloads.sourceforge.net/${project}/${img} ||
+set lmurl http://ftp.upjs.sk/pub/mirrors/${project}/${iso}
+
+# force sanboot type for efi systems, memdisk doesn't work
+iseq ${platform} efi && set sfboot sanboot ||
+
+goto sourceforge_${sfboot} ||
+
+# no sfboot variable defined, ask user
+menu Select boot method
+item --key m memdisk Memdisk [m]
+item --key s sanboot Sanboot [s]
+choose sfboot || exit
+echo ${cls}
+goto sourceforge_${sfboot}
+
+:sourceforge_sanboot
+imgfree
+imgtrust --allow
+echo ${lmurl}
+sanboot --no-describe ${lmurl} && exit ||
+echo ${sfurl}
+sanboot --no-describe ${sfurl}
+exit
+
+:sourceforge_memdisk
+imgfree
+imgtrust --allow
+isset ${iso} && kernel ${url}memdisk iso raw ${params} ||
+isset ${img} && kernel ${url}memdisk raw ${params} ||
+imgverify memdisk ${sigs}memdisk.sig
+# try local mirror first
+initrd ${lmurl} || goto sf_retry
+goto boot
+# try multiple times
+:sf_retry
+echo Press CTRL+C to retry from different mirror (max 5 attempts).
+set try x
+:retry
+iseq ${try} xxxxx && exit ||
+set try ${try}x
+initrd ${sfurl} || goto retry
+:boot
+boot

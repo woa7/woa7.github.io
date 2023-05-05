@@ -1,0 +1,14 @@
+#!ipxe
+
+# RancherOS
+
+set image https://releases.rancher.com/os/latest/rancheros.iso
+
+#sanboot ${mirror}/${dir}/${image}
+
+imgtrust --allow
+kernel ${url}memdisk iso raw ${params}
+#imgverify memdisk ${sigs}memdisk.sig
+initrd ${image}
+#imgverify ${image} ${sigs}${dir}/${image}.sig
+boot

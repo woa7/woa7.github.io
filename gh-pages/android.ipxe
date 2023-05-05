@@ -1,0 +1,14 @@
+#!ipxe
+
+# This doesn't really works. This ISO is not compatible with memdisk. :-(
+
+set project android-x86
+set rel 4.4
+set ver ${rel}-r1
+set iso Release%20${rel}/${project}-${ver}.iso
+#set isourl http://sourceforge.net/projects/${project}/files/${iso}/download
+#set sfboot sanboot
+set sfboot memdisk
+
+imgverify sourceforge.ipxe ${sigs}sourceforge.ipxe.sig
+chain sourceforge.ipxe

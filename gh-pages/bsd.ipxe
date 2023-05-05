@@ -1,0 +1,158 @@
+#!ipxe
+
+menu BSD systems
+item --key o openbsd OpenBSD [o]
+item --key n netbsd NetBSD [n]
+item --key f freebsd FreeBSD [f]
+item --key g ghostbsd GhostBSD [g]
+item --key m midnightbsd MidnightBSD [m]
+choose bsd || goto bsd_exit
+
+goto ${bsd}
+:bsd_exit
+exit 0
+
+:boot_bsd
+echo ${cls}
+imgfree
+imgtrust --allow
+echo URL: ${mirror}${dir}/${iso}
+initrd ${mirror}${dir}/${iso} || initrd ${mirror}${dir}/${iso2}
+chain ${url}memdisk iso raw
+exit
+
+:openbsd
+set os OpenBSD
+menu Choose major version for ${os} ${arch_a}
+item 7 ${os} 7
+item 6 ${os} 6
+item 5 ${os} 5
+item other ${os} Choose other version
+choose ver_major || exit 0
+
+iseq ${ver_major} other || goto skip_read_ver_major_openbsd
+echo ${cls}
+echo -n Enter major version: ${} && read ver_major
+:skip_read_ver_major_openbsd
+
+menu Choose minor version for ${os} ${ver_major} ${arch_a}
+item 9 ${os} ${ver_major}.9
+item 8 ${os} ${ver_major}.8
+item 7 ${os} ${ver_major}.7
+item 6 ${os} ${ver_major}.6
+item 5 ${os} ${ver_major}.5
+item 4 ${os} ${ver_major}.4
+item 3 ${os} ${ver_major}.3
+item --default 2 ${os} ${ver_major}.2
+item 1 ${os} ${ver_major}.1
+item 0 ${os} ${ver_major}.0
+item other ${os} Choose other version
+choose ver_minor || exit 0
+
+iseq ${ver_minor} other || goto skip_read_ver_minor_openbsd
+echo ${cls}
+echo -n Enter minor version: ${} && read ver_minor
+:skip_read_ver_minor_openbsd
+
+set ver ${ver_major}.${ver_minor}
+set verpl ${ver_major}${ver_minor}
+#set mirror http://ftp.openbsd.org/pub/
+iseq ${mirror} ${default_mirror} && set mirror http://ftp.nluug.nl/pub/ ||
+set dir OpenBSD/${ver}/${arch_a}
+set iso cd${verpl}.iso
+goto boot_bsd
+
+:netbsd
+set os NetBSD
+menu ${os} ${arch_a}
+item 9.3 ${os} 9.3
+item 9.2 ${os} 9.2
+item 9.1 ${os} 9.1
+item 9.0 ${os} 9.0
+item 8.2 ${os} 8.2
+item 7.2 ${os} 7.2
+item 6.1.5 ${os} 6.1.5
+item 6.0.4 ${os} 6.0.4
+item 5.2.2 ${os} 5.2.2
+item 5.1.4 ${os} 5.1.4
+item other ${os} Choose other version
+choose ver || exit 0
+
+iseq ${ver} other || goto skip_read_ver_netbsd
+echo ${cls}
+echo -n Enter version: ${} && read ver
+:skip_read_ver_netbsd
+
+# select mirror
+menu Select ${os} mirror
+item ftp://ftp.fi.netbsd.org/pub/NetBSD/ Finland
+item ftp://ftp.de.netbsd.org/pub/NetBSD/ Germany
+item ftp://ftp.hu.netbsd.org/pub/NetBSD/ Hungary
+item ftp://ftp.dk.netbsd.org/pub/NetBSD/ Denmark
+item ftp://ftp.ee.netbsd.org/pub/NetBSD/ Estonia
+item ftp://ftp2.jp.netbsd.org/pub/NetBSD/ Japan
+item ftp://ftp.kaist.ac.kr/NetBSD/ Korea
+item ftp://ftp.nl.netbsd.org/pub/NetBSD/ Netherlands
+item http://mirror.planetunix.net/pub/NetBSD/ USA
+item ftp://ftp.netbsd.org/pub/NetBSD/ Main site
+choose netbsd_mirror
+
+iseq ${mirror} ${default_mirror} && set mirror ${netbsd_mirror} ||
+set dir iso/${ver}
+set iso2 ${arch_a}cd-${ver}.iso
+set iso NetBSD-${ver}-${arch_a}.iso
+goto boot_bsd
+
+:freebsd
+set os FreeBSD
+menu ${os}
+item 13.1 ${os} 13.1
+item 13.0 ${os} 13.0
+item 12.4 ${os} 12.4
+item 11.4 ${os} 11.4
+item 10.3 ${os} 10.3
+item 9.2 ${os} 9.2
+item 8.4 ${os} 8.4
+item other ${os} Choose other version
+choose ver || exit 0
+
+iseq ${ver} other || goto skip_read_ver_freebsd
+echo ${cls}
+echo -n Enter version: ${} && read ver
+:skip_read_ver_freebsd
+
+iseq ${mirror} ${default_mirror} && set mirror http://ftp.cz.freebsd.org/pub/ ||
+set dir FreeBSD/releases/ISO-IMAGES/${ver}
+set iso FreeBSD-${ver}-RELEASE-${arch_a}-bootonly.iso
+goto boot_bsd
+
+:ghostbsd
+set os GhostBSD
+menu ${os}
+item 21.09.06 ${os} 21.09.06
+item 21.05.11 ${os} 21.05.11
+item 20.03 ${os} 20.03
+item other ${os} Choose other version
+choose ver || exit 0
+
+iseq ${ver} other || goto skip_read_ver_ghostbsd
+echo ${cls}
+echo -n Enter version: ${} && read ver
+:skip_read_ver_ghostbsd
+
+iseq ${mirror} ${default_mirror} && set mirror http://download.fr.ghostbsd.org/ ||
+set dir releases/${arch_a}/${ver}
+set iso GhostBSD-${ver}.iso
+goto boot_bsd
+
+:midnightbsd
+set os MidnightBSD
+menu ${os}
+item 3.0.0 ${os} 3.0.0
+choose ver || exit 0
+
+#iseq ${mirror} ${default_mirror} && set mirror http://archer.midnightbsd.org/ftp/
+iseq ${mirror} ${default_mirror} && set mirror http://discovery.midnightbsd.org/
+set dir releases/${arch_a}/ISO-IMAGES/${ver}
+set iso MidnightBSD-${ver}--${arch_a}-memstick.img
+goto boot_bsd

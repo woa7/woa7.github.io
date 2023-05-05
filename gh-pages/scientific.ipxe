@@ -1,0 +1,7 @@
+#!ipxe
+
+set menu scientific
+set os Scientific
+imgverify fedora.ipxe ${sigs}fedora.ipxe.sig
+chain fedora.ipxe
+exit

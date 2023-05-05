@@ -1,0 +1,5 @@
+User-agent: *
+Allow: /
+Disallow: /pciids
+Disallow: /pciids/
+Disallow: /sigs/[0-9a-f][0-9a-f][0-9a-f][0-9a-f].ipxe.sig

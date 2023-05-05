@@ -1,0 +1,552 @@
+#based on "pc" configuration
+# Accepted kernel parameters:
+#   part=root=4,vg=LVM_VG_NAME,swap=4,var=20,home=max
+#   disks=vda,vdb
+#   zerombr			!!!USE WITH CAUTION!!!
+#   lang=en_US
+#   pkgs=desktop,salpack
+#   config=http://boot.salstar.sk/ks/custom
+#   text
+#
+# System authorization information and root password
+auth --useshadow  --enablemd5
+rootpw --iscrypted $1$Nd.xn29E$ZyPRpRorSV06piZyARGxy/
+# System bootloader configuration
+bootloader --append="" --location=mbr --timeout=1
+# Firewall configuration (ssh is enabled by default)
+firewall --enabled
+# Run the Setup Agent on first boot
+firstboot --enable
+# System keyboard
+keyboard us
+# System language
+lang sk_SK.UTF-8
+#lang en_US.UTF-8
+# Installation logging level
+#logging info
+# Network information
+network --bootproto=dhcp --onboot=on
+#vnc --host=158.197.240.41 --port=5500
+# Reboot after installation
+reboot
+# Accept EULA
+#eula --agreed
+# SELinux configuration
+selinux --permissive
+# System timezone
+timezone --utc Europe/Bratislava
+# Install OS instead of upgrade
+install
+# Services
+#services --disabled=netfs --enabled=network
+# iSCSI
+#ignoredisk --interactive
+#iscsiname iqn.2012-09.test
+#iscsi --ipaddr=158.197.16.70 --target=iqn.2012-09.sk.upjs.ftp:fedora
+# Disk partitioning information
+#part / --bytes-per-inode=4096 --fstype="ext4" --grow --size=1
+%packages --ignoremissing
+-@Base
+dhclient
+openssh-clients
+openssh-server
+#screen
+wget
+rsync
+which
+iptables
+#joe
+#mc
+parted
+-sendmail
+%end
+
+%pre --interpreter /bin/bash
+# SAL's fedora/centos kickstart script
+
+# Fedora 25 has only python3
+if [ -x /usr/bin/python ]; then
+  PYTHON=/usr/bin/python
+else
+  PYTHON=/usr/bin/python3
+fi
+
+$PYTHON << PYTHON_EOF
+
+from __future__ import print_function
+import sys, os, re, socket
+if sys.version_info[0]>2:
+  from urllib.request import urlopen, HTTPError
+else:
+  from urllib2 import urlopen, HTTPError
+
+part_names = dict(
+  swap='swap',
+  boot='/boot',
+  var='/var',
+  home='/home',
+  tmp='/tmp',
+  www='/var/www',
+  backuppc='/var/lib/BackupPC',
+  mysql='/var/lib/mysql',
+  pgsql='/var/lib/pgsql',
+  mongodb='/var/lib/mongodb',
+  redis='/var/lib/redis',
+  squid='/var/spool/squid',
+  opt='/opt'
+)
+sys.stdout = open('/tmp/salstar.ks', 'wt')
+spare = 2
+
+# check distribution (el6 or fc20)
+distro, arch = os.popen('uname -r').read().strip().split('.')[-2:]
+if arch.endswith('86'):
+  arch = "i386"
+
+# boot command line
+cmd_line = {}
+for cmd in open('/proc/cmdline').read().strip().split(' '):
+  arg = None
+  if '=' in cmd:
+    cmd, arg = cmd.split('=', 1)
+  cmd_line[cmd] = arg
+
+def disksize(*disks):
+    ds = [
+           int(open('/sys/class/block/%s/size' % x).read().strip())/2048
+           for x in disks
+         ]
+    print("# disksizes: %s = %s" % (disks, ds))
+    return min(ds)
+
+def size(s, disks=None, sum=0):
+    if s in ['', 'max']:
+      if disks is None:
+        return "1 --grow"
+      else:
+        print("# sum=%d kB" % sum)
+        return disksize(*disks)-sum
+    if s.endswith('m') or s.endswith('M'):
+      return int(s[:-1])
+    else:
+      return int(float(s.strip('gG'))*1024)
+
+class mk_raid:
+  cntr = -1
+  def __init__(self, disks):
+      self.disks = disks
+  def add(self, s):
+      raids = []
+      self.cntr += 1
+      for i in 0, 1:
+        if self.disks[i]:
+          args = ""
+          if self.cntr==0:
+            args += " --asprimary"
+          print("part raid.%d%d --size=%s --ondisk=%s%s" \
+                % (self.cntr, i+1, s, self.disks[i], args))
+          raids.append("raid.%d%d" % (self.cntr, i+1))
+      return raids
+  def add_raid1(self, name, s, fstype=""):
+      raids = self.add(s)
+      print("raid %s --level=1 --device=md%d %s %s" \
+            % (name, self.cntr, fstype, " ".join(raids)))
+  def add_vg(self, vg, s):
+      self.add_raid1("pv.01", s)
+      print("volgroup %s pv.01" % vg)
+  def add_part(self, mp, s, fstype='--fstype=ext4'):
+      self.add_raid1(mp, s, fstype)
+
+def not_cdrom_or_lun(hd):
+    try:
+      media = open('/sys/block/%s/device/media' % hd, 'r').read().strip()
+      if media=='cdrom':
+        return False
+    except IOError:
+      pass
+    try:
+      model = open('/sys/block/%s/device/model' % hd, 'r').read().strip()
+      if model=='LUNZ':
+        return False
+    except IOError:
+      pass
+    return True
+
+def detect_disks():
+    return [x for x in os.listdir('/sys/block')
+            if (x[0:2] in ['sd','vd','hd']) and not_cdrom_or_lun(x)]
+
+def initdisks(disks):
+    if 'zerombr' in cmd_line:
+      print("zerombr")
+    if disks:
+      print("clearpart --all --initlabel --drives=%s" \
+            % ','.join([x for x in disks if x]))
+    else:
+      print("clearpart --all --initlabel")
+
+def autopartition(disks, parts):
+    if distro.startswith("fc"):
+      biosboot = 2
+    else:
+      biosboot = 0
+    if disks and disks.startswith("iscsi:"):
+      #print("ignoredisk --interactive")
+      print("iscsiname iqn.2012-09.test")
+      print("iscsi --ipaddr=%s --target=%s --user=%s --password=%s" \
+            % tuple(disks[6:].split(";", 3)))
+      return
+    if not parts:
+      return
+    if disks:
+      print("ignoredisk --only-use=%s" % disks.strip(','))
+      disks = disks.split(',')
+    else:
+      disks = detect_disks()
+    parts = [x.split('=', 1) for x in parts.split(',')]
+    vg = None
+    if len(disks)==1:
+      # one disk partition scheme
+      disk0 = disks[0]
+      for key, value in parts:
+        if ':' in value:
+          fstype = "--fstype=%s" % value.split(':', 1)[1]
+          value = value.split(':', 1)[0]
+        elif key=='swap':
+          fstype = ''
+        elif distro=='el7':
+          fstype = '--fstype=xfs'
+        else:
+          fstype = '--fstype=ext4'
+        if key=='vg':
+          vg = value
+          print("part pv.01 --ondisk=%s --size=1 --grow" % disk0)
+          print("volgroup %s pv.01" % vg)
+        elif key=='biosboot':
+          biosboot = size(value)
+        elif key=='root':
+          initdisks(disks)
+          if biosboot>0:
+            print("part biosboot --fstype=biosboot --ondisk=%s --size=%d" \
+                  % (disk0, biosboot))
+          print("part / --ondisk=%s %s --size=%d" \
+                % (disk0, fstype, size(value)))
+        elif key in part_names:
+          if vg:
+            print("logvol %s --vgname=%s --size=%s --name=%s %s" \
+                  % (part_names[key], vg, size(value), key, fstype))
+          else:
+            print("part %s --ondisk=%s %s --size=%d" \
+                  % (part_names[key], disk0, fstype, size(value)))
+    elif len(disks)==2:
+      # raid 1 partition scheme
+      sum = spare # 1
+      disk0 = disks[0]
+      disk1 = disks[1]
+      raid = mk_raid(disks)
+      for key, value in parts:
+        if ':' in value:
+          fstype = "--fstype=%s" %value.split(':', 1)[1]
+          value = value.split(':', 1)[0]
+        elif key=='swap':
+          fstype = ''
+        elif distro=='el7':
+          fstype = '--fstype=xfs'
+        else:
+          fstype = '--fstype=ext4'
+        print("# key, value, fstype:", key, value, fstype)
+        if key=='vg':
+          vg = value
+          # calculate pv size
+          #s = 0
+          #for k, v in parts:
+          #  if k=='vg':
+          #    s = 1
+          #  elif s>0:
+          #    if v.isdigit():
+          #      s += int(v)*1024
+          #    else:
+          #      s += 1
+          # add pv
+          # --grow disabled in F14 for raid partitions :-(
+          #raid.add_vg(vg, "%d --grow" % s)
+          print("# disk size: %d-%d" % (disksize(*disks), sum))
+          raid.add_vg(vg, "%d" % (disksize(*disks)-sum))
+        elif key=='biosboot':
+          biosboot = size(value)
+        elif key=='root':
+          initdisks(disks)
+          if biosboot>0:
+            print("part biosboot --fstype=biosboot --ondisk=%s --size=%d" \
+                   % (disk0, biosboot))
+            print("part biosboot --fstype=biosboot --ondisk=%s --size=%d" \
+                   % (disk1, biosboot))
+            sum += biosboot
+          s = size(value, disks, sum)
+          raid.add_part("/", s, fstype)
+          sum += s
+        elif key in part_names:
+          if vg:
+            print("logvol %s --vgname=%s --size=%s --name=%s %s" \
+                  % (part_names[key], vg, size(value), key, fstype))
+          else:
+            s = size(value, disks, sum)
+            raid.add_part(part_names[key], s, fstype)
+            sum += s
+        print("# sum=%d kB" % sum)
+
+class repocfg_class:
+  fc = dict(
+    base = [
+      'url --url=%(mirror)s/fedora/linux/%(dir)s/%(ver)d/Fedora/%(arch)s/os/',
+      'repo --name=Updates --baseurl=%(mirror)s/fedora/linux/updates/%(ver)d/Everything/%(arch)s/'
+    ],
+    other = [
+      'repo --name=Everything --baseurl=%(mirror)s/fedora/linux/%(dir)s/%(ver)d/Everything/%(arch)s/os/',
+      'repo --name=SALstar.sk --baseurl=https://www.salstar.sk/pub/fedora/%(ver)d/%(arch)s/'
+    ],
+    testing = [
+      'repo --name=Updates-testing --baseurl=%(mirror)s/fedora/linux/updates/testing/%(ver)d/Everything/%(arch)s/'
+    ]
+  )
+  el = dict(
+    base = [
+      'url --url=%(mirror)s/centos/%(ver)d/os/%(arch)s/',
+      'repo --name=Updates --baseurl=%(mirror)s/centos/%(ver)d/updates/%(arch)s/',
+      'repo --name=EPEL --baseurl=%(mirror)s/mirrors/epel/%(ver)d/%(arch)s/'
+    ],
+    epel = [
+      'repo --name=EPEL --baseurl=%(mirror)s/mirrors/epel/%(ver)d/%(arch)s/'
+    ],
+    cr = [
+      'repo --name=CR --baseurl=%(mirror)/centos/%(ver)/cr/%(arch)/',
+    ],
+    other = [
+      'repo --name=SALstar.sk --baseurl=https://www.salstar.sk/pub/epel/%(ver)d/%(arch)s/'
+    ],
+    testing = [
+      'repo --name=EPEL-testing --baseurl=%(mirror)s/mirrors/epel/testing/%(ver)d/%(arch)s/'
+    ]
+  )
+  extra_pkgs = ('pkgs' in cmd_line) or ('packages' in cmd_line)
+  cmd_line_testing = 'testing' in cmd_line
+  cmd_line_repo = cmd_line.get('repo')
+  cmd_line_pkgrepo = cmd_line.get('pkgrepo', '').split(',')
+  cmd_line_packages = cmd_line.get('pkgs') or cmd_line.get('packages')
+  def get(self, distro):
+      grps = getattr(self, distro)
+      ret = grps['base']
+      for pkgrepo in self.cmd_line_pkgrepo:
+        if pkgrepo=='none':
+          ret = []
+        elif grps.get(pkgrepo):
+          ret.extend(grps[pkgrepo])
+      if self.cmd_line_testing:
+        ret.extend(grps['testing'])
+      if self.extra_pkgs:
+        ret.extend(grps['epel'])
+        ret.extend(grps['other'])
+      return ret
+  def repo_update(self, distro, version, arch):
+      for repo in self.get(distro):
+        if repo.startswith("url") and self.cmd_line_repo:
+          print("url --url=%s" % self.cmd_line_repo)
+        else:
+          print(repo % dict(
+                  mirror="http://ftp.upjs.sk/pub",
+                  dir="releases",
+                  ver=version,
+                  arch=arch
+                ))
+  def geturl(self, url):
+      if "://" not in url:
+        url = os.path.join(os.path.dirname(cmd_line['ks']), url)
+      #return urlopen(url).read()
+      return '%include ' + url
+  def package_update(self, distro, version):
+      distro_packages = dict(
+        fc = ["gdisk"],
+        el = ["epel-release"]
+      )
+      group_packages = dict(
+        desktop = 'desktop.pkgs'
+      )
+      print("%packages --ignoremissing")
+      print("\n".join(distro_packages.get(distro)))
+      if self.cmd_line_packages:
+        for pkg in self.cmd_line_packages.split(','):
+          if pkg in group_packages:
+            print(self.geturl(group_packages[pkg]))
+          else:
+            print(pkg)
+      print("%end")
+
+def lang(lang):
+    if not lang:
+      return
+    langs = dict(
+      en = "en_US",
+      sk = "sk_SK",
+      cs = "cs_CZ"
+    )
+    if "_" not in lang and lang in langs:
+      lang = langs[lang]
+    if "." not in lang:
+      lang += ".UTF-8"
+    print("lang", lang)
+
+def url_get(src, dst=None):
+    if cmd_line.get('config').startswith('https://'):
+      import pycurl
+      content = []
+      c = pycurl.Curl()
+      c.setopt(pycurl.WRITEFUNCTION, content.append)
+      c.setopt(pycurl.URL, os.path.join(cmd_line.get('config'), src))
+      try:
+        c.perform()
+        c.close()
+      except pycurl.error as err:
+        sys.stderr.write('Download error: %s [%s]' % (err[1], src))
+        return ''
+      script = ''.join(content)
+    else:
+      try:
+        script = urlopen(
+          os.path.join(cmd_line.get('config'), src)
+        ).read()
+      except HTTPError as err:
+        sys.stderr.write('Download error: %s [%s]' % (err, src))
+        return ''
+    if dst:
+      open(dst, 'wt').write(script)
+      os.chmod(dst, 0o755)
+    return script
+
+if "text" in cmd_line:
+  print("text")
+if "passwd" in cmd_line:
+  if cmd_line["passwd"].startswith("$"):
+    print("rootpw --iscrypted %s" % cmd_line["passwd"])
+  else:
+    print("rootpw %s" % cmd_line["passwd"])
+autopartition(
+  cmd_line.get('disk') or cmd_line.get('disks'),
+  cmd_line.get('part')
+)
+repocfg = repocfg_class()
+repocfg.repo_update(distro[:2], int(distro[2:]), arch)
+repocfg.package_update(distro[:2], int(distro[2:]))
+lang(cmd_line.get('lang'))
+# custom configuration
+if 'config' in cmd_line:
+  exec(url_get('pre.py'))
+  if url_get('pre.sh', '/tmp/salstar-custom-pre.sh'):
+    os.system('/tmp/salstar-custom-pre.sh')
+  url_get('post.sh', '/tmp/salstar-custom-post.sh')
+PYTHON_EOF
+%end
+
+%post --nochroot --interpreter /bin/bash
+
+# Fedora 25 has only python3
+if [ -x /usr/bin/python ]; then
+  PYTHON=/usr/bin/python
+else
+  PYTHON=/usr/bin/python3
+fi
+
+$PYTHON << PYTHON_EOF
+
+from __future__ import print_function
+import sys, os, re
+
+chroot = '/mnt/sysimage'
+
+repo_conf = '''\
+[salstar.sk]
+name=SALstar.sk \$releasever - \$basearch - Base
+#baseurl=http://ftp.upjs.sk/pub/users/sal/Fedora/\$releasever/
+mirrorlist=https://www.salstar.sk/download/mm/%(DISTRO)s/salstar/\$releasever/\$basearch
+gpgkey=https://www.salstar.sk/pub/sagator/SAGATOR-GPG-KEY
+gpgcheck=1
+enabled=1
+metadata_expire=1
+
+[salstar.sk-testing]
+name=SALstar.sk \$releasever - \$basearch - Testing
+mirrorlist=https://www.salstar.sk/download/mm/%(DISTRO)s/salstar-testing/\$releasever/\$basearch
+gpgkey=https://www.salstar.sk/pub/sagator/SAGATOR-GPG-KEY
+gpgcheck=1
+enabled=0
+metadata_expire=1
+
+[salstar.sk-builder]
+name=builder.salstar.sk
+baseurl=http://builder.salstar.sk/local/$releasever/$basearch/
+gpgkey=https://www.salstar.sk/pub/sagator/SAGATOR-GPG-KEY
+gpgcheck=0
+enabled=0
+metadata_expire=1
+'''
+
+repo_key = '''\
+-----BEGIN PGP PUBLIC KEY BLOCK-----
+Version: GnuPG v1.4.6 (GNU/Linux)
+
+mQGiBEWSfqgRBADu/silyFvlgwCzsu8Ha/llSd4MidiYIeWO8vLszSJn6kVo+xbF
+hDlj/UXHQVwp/Q6pqrrNxucJSFaE/qWi6KuZ4XqN2xWyUAjSCJ0BiUJyoTD9NOg3
+yXyzXVLRklHaeOUdNF7e376Vfwsgix1wsehBh66vtyX1znDfWPcqfAZkpwCgsw95
+2f/9qBYhCM61Nd/jFe6HbW0EANmlw/CIS+QNCQQPntXbL2rGD80VLXK6W+yIMuPu
+bkSn1PJpeO4BBjOynVqAuW4bERm5gSPDxBqE5vD9Ef8pqsoUHRIVTyj1Z2I1JbXn
+OjbUZmFcLdqVNNHNRu3Bkb8YLD3qdtG6CHG6CfowYXZfdaTVgyYIcLiStGNNKaXI
+omJQA/9YFv2xvP82xykZvHqx0hnn/NXFrSn+9TJGdDKOo/6/6AA6BwXRBwjHG1x2
+1CCIbnTOmoDeBw5+hpVtLnACannT6VnNvZ+Zm+qoMBZ/E+2m6MkkywyP7oUIsxLp
+7FnZHd/e6FGpgzup55mZboAgth/l4+w1ztF1aCGHu6ATsR3VWLQpSmFuIE9ORFJF
+SiAoU0FHQVRPUikgPG9uZHJlampAc2Fsc3Rhci5zaz6IYAQTEQIAIAUCRZJ+qAIb
+AwYLCQgHAwIEFQIIAwQWAgMBAh4BAheAAAoJEAiqUAZrgi/nW/QAoJfsGDX8h6WH
+JqwZbPlWrR9FRP8ZAJ94pSLvMM6rfXlMbeOejfvFcdwc8w==
+=R77L
+-----END PGP PUBLIC KEY BLOCK-----
+'''
+
+# add access from gateway, if behind NAT
+gwaccess=""
+gwip=os.popen(
+  """/sbin/ip route get to 1.1.1.1 | awk '\$2=="via" { print \$3 }'"""
+).read().strip()
+if re.search('^(10|172\.(1[6-9]|2[0-9]|3[01])|192\.168)\.', gwip):
+  gwaccess=","+gwip
+
+ssh_authorized_keys='''\
+from="work.salstar.sk,158.197.240.41,work6.salstar.sk,2001:4118:400:1::/64%s" \
+ecdsa-sha2-nistp521 AAAAE2VjZHNhLXNoYTItbmlzdHA1MjEAAAAIbmlzdHA1MjEAAACFBAAORxvbaG3OX99nkgSkVCPbptyfeBUUdlOtz5wPkN/EZozVQ56ZsKMHLXpHiBb973/PCrVQz1B4+n+D7Ud/UMSZIgGBThb2+Mh46qqrgPu1QhbvzcK1W4qEOsDWu4KQgCpxfFEaaF6a7V7MOrtXdSZmauMmSpSHO7BWM7Aq3PTVXH0Hvg== ondrejj@work.salstar.sk
+''' % gwaccess
+
+# detect distribution
+rh_release = open(chroot+'/etc/redhat-release').read()
+if re.compile('^(CentOS|Red Hat|Scientific)').search(rh_release):
+  os.environ['DISTRO'] = 'epel'
+else:
+  os.environ['DISTRO'] = 'fedora'
+os.environ['CHROOT'] = chroot
+
+# add yum repository
+open(chroot+'/etc/yum.repos.d/salstar.repo', 'wt').write(
+  repo_conf % os.environ
+)
+open(chroot+'/etc/pki/rpm-gpg/SAGATOR-GPG-KEY', 'wt').write(repo_key)
+# add ssh key
+if not os.path.isdir(chroot+'/root/.ssh'):
+  os.mkdir(chroot+'/root/.ssh')
+open(chroot+'/root/.ssh/authorized_keys', 'wt').write(ssh_authorized_keys)
+# custom configuration
+if os.path.exists('/tmp/salstar-custom-post.py'):
+  exec(open('/tmp/salstar-custom-post.py').read())
+if os.path.exists('/tmp/salstar-custom-post.sh'):
+  os.system('/tmp/salstar-custom-post.sh')
+os.system('sync')
+
+PYTHON_EOF
+%end
+
+%include /tmp/salstar.ks

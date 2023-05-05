@@ -1,0 +1,46 @@
+#!ipxe
+
+# https://gparted.org/download.php
+# https://sourceforge.net/projects/gparted/files/gparted-live-stable/
+# For 32bit versions requires "vmalloc=256MiB".
+
+iseq ${arch} x86_64 && set gp_arch amd64 || set gp_arch i686
+
+set os GParted
+menu Choose ${os} ${gp_arch}
+item 1.5.0-1 ${os} 1.5.0-1
+item 1.4.0-1 ${os} 1.4.0-1
+item 1.3.1-1 ${os} 1.3.1-1
+item 1.3.0-1 ${os} 1.3.0-1
+item 1.2.0-1 ${os} 1.2.0-1
+item 1.1.0-8 ${os} 1.1.0-8
+item 1.0.0-5 ${os} 1.0.0-5
+item 0.33.0-2 ${os} 0.33.0-2
+#item 0.32.0-1 ${os} 0.32.0-1
+#item 0.31.0-1 ${os} 0.31.0-1
+item 0.30.0-1 ${os} 0.30.0-1
+item 0.29.0-1 ${os} 0.29.0-1
+item 0.28.1-1 ${os} 0.28.1-1
+item 0.27.0-1 ${os} 0.27.0-1
+item 0.26.1-5 ${os} 0.26.1-5
+item 0.25.0-3 ${os} 0.25.0-3
+item 0.24.0-2 ${os} 0.24.0-2
+item 0.23.0-1 ${os} 0.23.0-1
+item 0.22.0-2 ${os} 0.22.0-2
+item 0.21.0-1 ${os} 0.21.0-1
+item --key o other Choose other version [o]
+choose ver || exit
+
+iseq ${ver} other || goto skip_read_ver
+echo ${cls}
+clear ver
+echo -n Enter version: ${} && read ver
+:skip_read_ver
+
+set project gparted
+set sfboot memdisk
+set stability stable
+set iso ${project}-live-${stability}/${ver}/${project}-live-${ver}-${gp_arch}.iso
+
+imgverify sourceforge.ipxe ${sigs}sourceforge.ipxe.sig
+chain sourceforge.ipxe

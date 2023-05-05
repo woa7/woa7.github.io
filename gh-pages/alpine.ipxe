@@ -1,0 +1,35 @@
+#!ipxe
+
+set os Alpine Linux
+
+#chain https://boot.alpinelinux.org/alpine-ipxe/x86_64/ipxe.lkrn
+#set mirrorurl https://dl-cdn.alpinelinux.org/alpine
+set mirrorurl http://mirror.fit.cvut.cz/alpine
+
+menu ${os} ${arch}
+item 3.16 ${os} 3.16
+item 3.15 ${os} 3.15
+item 3.14 ${os} 3.14
+item 3.13 ${os} 3.13
+item 3.12 ${os} 3.12
+item 3.11 ${os} 3.11
+choose ver || exit
+
+menu ${os} ${arch} ${ver}
+item lts LTS
+item virt Virt
+choose variant || exit
+
+set netboot ${mirrorurl}/v${ver}/releases/${arch}/netboot
+
+#set params ${params} modules=loop,squashfs,sd-mod,usb-storage
+set params ${params} alpine_repo=${mirrorurl}/v${ver}/main/
+set params ${params} modloop=${netboot}/modloop-${variant}
+set params ${params} console=tty0 console=ttyS0
+
+imgtrust --allow
+kernel ${netboot}/vmlinuz-${variant}
+initrd ${netboot}/initramfs-${variant}
+imgargs vmlinuz-${variant} initrd=initramfs-${variant} ip=dhcp ${params}
+boot
+ 

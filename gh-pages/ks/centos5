@@ -1,0 +1,256 @@
+#based on "centos5" configuration
+#kernel parameter:
+#  part=root=4,vg=VGNAME,swap=4,var=20,home=max
+#
+#platform=x86, AMD64, alebo Intel EM64T
+# System authorization information
+auth  --useshadow  --enablemd5 
+# System bootloader configuration
+bootloader --append="" --location=mbr
+# Clear the Master Boot Record
+#zerombr
+# Partition clearing information
+#clearpart --all --initlabel 
+# Use graphical install
+#graphical
+# Firewall configuration
+firewall --enabled --port=ssh:tcp
+# Run the Setup Agent on first boot
+firstboot --enable
+# Use interactive kickstart installation method
+#interactive
+# System keyboard
+keyboard us
+# System language
+lang sk_SK.UTF-8
+#lang en_US.UTF-8
+# Installation logging level
+#logging info
+url --url=http://ftp.upjs.sk/pub/centos/5/os/x86_64
+repo --name=Updates --baseurl=http://ftp.upjs.sk/pub/centos/5/updates/x86_64
+#repo --name=Salstar --baseurl=http://www.salstar.sk/pub/centos/5/
+# Network information
+network --bootproto=dhcp --device=eth0 --onboot=on
+#vnc --host=158.197.240.41 --port=5500
+# Reboot after installation
+reboot
+#Root password
+rootpw --iscrypted $1$Nd.xn29E$ZyPRpRorSV06piZyARGxy/
+# SELinux configuration
+selinux --permissive
+# Do not configure the X Window System
+#skipx
+# System timezone
+timezone --utc Europe/Bratislava
+# Install OS instead of upgrade
+install
+# Services
+services --disabled=netfs --enabled=network,postfix
+# Disk partitioning information
+#part / --bytes-per-inode=4096 --fstype="ext3" --grow --size=1
+%include /tmp/partitions.cfg
+
+%packages --nobase
+dhclient
+yum
+yum-utils
+openssh-clients
+openssh-server
+screen
+wget
+rsync
+which
+iptables
+nash
+joe
+mc
+-sendmail
+logrotate
+acpid
+man
+postfix
+# from everything packages
+#yum-cron
+#yum-fastestmirror
+
+%pre --interpreter /usr/bin/python
+import os, sys, re
+
+part_names = dict(
+  swap='swap',
+  var='/var',
+  home='/home',
+  tmp='/tmp',
+  www='/var/www',
+  backuppc='/var/lib/BackupPC'
+)
+sys.stdout = open('/tmp/partitions.cfg', 'wt')
+
+def size(s):
+    if s in ['', 'max', 'm']:
+      return "1 --grow"
+    else:
+      return int(s)*1024
+
+class mk_raid:
+  cntr = -1
+  def __init__(self, disks):
+      self.disks = disks
+  def add(self, s):
+      self.cntr += 1
+      for i in 0, 1:
+        print "part raid.%d%d --size=%s --ondisk=%s" \
+              % (self.cntr, i+1, s, self.disks[i])
+  def add_vg(self, vg, s):
+      self.add(s)
+      print "raid pv.01 --level=1 --device=md%d raid.%d1 raid.%d2" \
+            % (self.cntr, self.cntr, self.cntr)
+      print "volgroup %s pv.01" % vg
+  def add_part(self, mp, s):
+      self.add(size(s))
+      print "raid %s --level=1 --device=md%d --fstype=ext3 raid.%d1 raid.%d2" \
+            % (mp, self.cntr, self.cntr, self.cntr)
+
+def version_check():
+    try:
+      ver, arch = re.compile('^.*\.fc([0-9][0-9])\.([^. ]+)[. ].*$', re.S
+                  ).sub('\\1 \\2', open('/proc/version').read()).split()
+      ver = int(ver)
+      if arch.endswith('86'):
+        arch='i386'
+      URL="http://ftp.upjs.sk/pub/fedora/linux"
+      print "url --url=%s/releases/%d/Fedora/%s/os/" % (URL, ver, arch)
+      print "#repo --name=Everything --baseurl=%s/releases/%d/Everything/%s/os/" % (URL, ver, arch)
+      print "repo --name=Updates --baseurl=%s/updates/%d/i386/" % (URL, ver)
+      print "#repo --name=Salstar --baseurl=http://www.salstar.sk/pub/fedora/%d/" % ver
+    except Exception, e:
+      print "#", e
+
+def not_cdrom(hd):
+    try:
+      media = open('/sys/block/%s/device/media' % hd, 'r').read().strip()
+      return media != 'cdrom'
+    except IOError:
+      return True
+
+def autopartition():
+    disks = [x for x in os.listdir('/sys/block')
+             if (x[0:2] in ['sd','vd','hd']) and not_cdrom(x)]
+    part_line = [x for x in open('/proc/cmdline').read().strip().split(' ')
+                 if x.startswith('part=')]
+    if part_line:
+      parts = part_line[0].split('=', 1)[1]
+      parts = [x.split('=', 1) for x in parts.split(',')]
+      vg = None
+
+      if len(disks)==1:
+        # one disk partition scheme
+        disk0 = disks[0]
+        for key, value in parts:
+          if key=='vg':
+            vg = value
+            print "part pv.01 --ondisk=%s --size=1 --grow" % disk0
+            print "volgroup %s pv.01" % vg
+          elif key=='root':
+            print "clearpart --all --initlabel"
+            print "part / --ondisk=%s --fstype=ext3 --size=%d" \
+                  % (disk0, size(value))
+          elif key in part_names:
+            if vg:
+              print "logvol %s --vgname=%s --size=%s --name=%s --fstype=ext3" \
+                    % (part_names[key], vg, size(value), key)
+            else:
+              print "part %s --ondisk=%s --fstype=ext3 --size=%d" \
+                    % (part_names[key], disk0, size(value))
+      elif len(disks)==2:
+        # raid 1 partition scheme
+        disk0 = disks[0]
+        disk1 = disks[1]
+        raid = mk_raid(disks)
+        for key, value in parts:
+          if key=='vg':
+            vg = value
+            # calculate pv size
+            s = 0
+            for k, v in parts:
+              if k=='vg':
+                s = 1
+              elif s>0:
+                if v.isdigit():
+                  s += int(v)*1024
+                else:
+                  s += 1
+            # add pv
+            raid.add_vg(vg, "%d --grow" % s)
+          elif key=='root':
+            print "clearpart --all --initlabel"
+            raid.add_part("/", value)
+          elif key in part_names:
+            if vg:
+              print "logvol %s --vgname=%s --size=%s --name=%s --fstype=ext3" \
+                    % (part_names[key], vg, size(value), key)
+            else:
+              raid.add_part(part_names[key], value)
+
+#version_check()
+autopartition()
+
+%post --interpreter /bin/bash
+cd /etc/yum.repos.d
+#wget -q http://158.197.16.66/pub/yum/yum.repos.d/salstar.repo
+cat > /etc/yum.repos.d/salstar.repo << KSEOF
+[salstar.sk]
+name=Salstar.sk \$releasever - \$basearch - Base
+#baseurl=http://ftp.upjs.sk/pub/users/sal/Fedora/\$releasever/
+mirrorlist=https://www.salstar.sk/download/mirrors/salstar-centos5
+gpgkey=https://www.salstar.sk/pub/sagator/SAGATOR-GPG-KEY
+gpgcheck=1
+enabled=1
+metadata_expire=1
+
+[salstar.sk-test]
+name=Salstar.sk \$releasever - \$basearch - Testing
+mirrorlist=https://www.salstar.sk/download/mirrors/salstar-centos-testing
+gpgkey=https://www.salstar.sk/pub/sagator/SAGATOR-GPG-KEY
+gpgcheck=1
+enabled=0
+metadata_expire=1
+
+[salstar.sk-builder]
+name=builder.salstar.sk
+baseurl=http://builder.salstar.sk/local/\$releasever/\$basearch/
+gpgkey=https://www.salstar.sk/pub/sagator/SAGATOR-GPG-KEY
+gpgcheck=0
+enabled=0
+metadata_expire=1
+KSEOF
+cd /etc/pki/rpm-gpg
+#wget -q http://158.197.16.66/pub/sagator/SAGATOR-GPG-KEY
+cat > /etc/pki/rpm-gpg/SAGATOR-GPG-KEY << KSEOF
+-----BEGIN PGP PUBLIC KEY BLOCK-----
+Version: GnuPG v1.4.6 (GNU/Linux)
+
+mQGiBEWSfqgRBADu/silyFvlgwCzsu8Ha/llSd4MidiYIeWO8vLszSJn6kVo+xbF
+hDlj/UXHQVwp/Q6pqrrNxucJSFaE/qWi6KuZ4XqN2xWyUAjSCJ0BiUJyoTD9NOg3
+yXyzXVLRklHaeOUdNF7e376Vfwsgix1wsehBh66vtyX1znDfWPcqfAZkpwCgsw95
+2f/9qBYhCM61Nd/jFe6HbW0EANmlw/CIS+QNCQQPntXbL2rGD80VLXK6W+yIMuPu
+bkSn1PJpeO4BBjOynVqAuW4bERm5gSPDxBqE5vD9Ef8pqsoUHRIVTyj1Z2I1JbXn
+OjbUZmFcLdqVNNHNRu3Bkb8YLD3qdtG6CHG6CfowYXZfdaTVgyYIcLiStGNNKaXI
+omJQA/9YFv2xvP82xykZvHqx0hnn/NXFrSn+9TJGdDKOo/6/6AA6BwXRBwjHG1x2
+1CCIbnTOmoDeBw5+hpVtLnACannT6VnNvZ+Zm+qoMBZ/E+2m6MkkywyP7oUIsxLp
+7FnZHd/e6FGpgzup55mZboAgth/l4+w1ztF1aCGHu6ATsR3VWLQpSmFuIE9ORFJF
+SiAoU0FHQVRPUikgPG9uZHJlampAc2Fsc3Rhci5zaz6IYAQTEQIAIAUCRZJ+qAIb
+AwYLCQgHAwIEFQIIAwQWAgMBAh4BAheAAAoJEAiqUAZrgi/nW/QAoJfsGDX8h6WH
+JqwZbPlWrR9FRP8ZAJ94pSLvMM6rfXlMbeOejfvFcdwc8w==
+=R77L
+-----END PGP PUBLIC KEY BLOCK-----
+KSEOF
+mkdir -p /root/.ssh
+echo 'from="work.salstar.sk,158.197.240.41" ssh-rsa AAAAB3NzaC1yc2EAAAABIwAAAQEAou3n+SuHVsuM5QXAKnIKilPHnJdKm/KP31Ho2VahJIC7mK0+snbXZYXeQmnwYvqQaDVCl8p0ANMonbs189t+RdBZ86Yq6/boc7zhyrj3gqzflsjyGWp5Gfo2AGQ9pgW3JMHefHMMXqF2uB9pT7PRL873gGfMG1WE3W+loFpDYPgg5TQvDifDP+cnlEdT/30JROFBbJ6sJro5la+7vZT/Yd9JOyNSvjizSsqLyva/t1zhQ2Bb37xGJOgVoRc1Hj+fYe1+jaD2ebtGWWIykvfIb33tpoBg3KkN01rrniTiVD8t1yNPGxc9VecqJoK5QJOCZ6zpjeFtvmiZwdd9bgfznQ== ondrejj@work.salstar.sk' >> /root/.ssh/authorized_keys
+#chkconfig network on
+#chkconfig postfix on
+if [ -e /sys/block/vdb -o -e /sys/block/sdb ]; then
+  echo -e 'root (hd0,0)\nsetup (hd0)' | grub --device-map=/boot/grub/device.map
+  echo -e 'root (hd1,0)\nsetup (hd1)' | grub --device-map=/boot/grub/device.map
+fi
+sync

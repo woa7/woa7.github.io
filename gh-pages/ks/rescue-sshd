@@ -1,0 +1,53 @@
+#based on "rescue" configuration
+# System authorization information
+auth  --useshadow  --enablemd5 
+sshpw --username=root --iscrypted $6$u5FhpPHs$N69Gq3rAUVCzyCHUiiH5fScNPPgB0qVAGhlJ52g5XE.R5BSepuH.BmwyMjOYnM9n3ew0cE0VIajJirBKY/Mzm0
+# System bootloader configuration
+bootloader --append="" --location=mbr --timeout=1
+# Firewall configuration
+firewall --enabled --port=ssh:tcp
+# Run the Setup Agent on first boot
+firstboot --enable
+# Use interactive kickstart installation method
+#interactive
+# System keyboard
+keyboard us
+# System language
+lang sk_SK.UTF-8
+#lang en_US.UTF-8
+# Installation logging level
+#logging info
+# Network information
+network --bootproto=dhcp --onboot=on
+#vnc --host=158.197.240.41 --port=5500
+# Reboot after installation
+#reboot
+#Root password
+rootpw --iscrypted $6$u5FhpPHs$N69Gq3rAUVCzyCHUiiH5fScNPPgB0qVAGhlJ52g5XE.R5BSepuH.BmwyMjOYnM9n3ew0cE0VIajJirBKY/Mzm0
+# SELinux configuration
+selinux --permissive
+# System timezone
+timezone --utc Europe/Bratislava
+# Install OS instead of upgrade
+rescue
+# Services
+services --disabled=netfs --enabled=network
+
+%pre --interpreter /bin/bash
+mkdir -p /etc/ssh
+cat > /etc/ssh/sshd_config << EOF
+Port 22
+PasswordAuthentication no
+UsePAM no
+AcceptEnv LANG LC_ALL LANGUAGE
+Subsystem       sftp internal-sftp
+AuthorizedKeysFile /etc/ssh/authorized_keys
+EOF
+cat > /etc/ssh/authorized_keys << EOF
+from="work.salstar.sk,158.197.240.41,10.*,192.168.*,172.16.*,172.22.*" ssh-rsa AAAAB3NzaC1yc2EAAAABIwAAAQEAou3n+SuHVsuM5QXAKnIKilPHnJdKm/KP31Ho2VahJIC7mK0+snbXZYXeQmnwYvqQaDVCl8p0ANMonbs189t+RdBZ86Yq6/boc7zhyrj3gqzflsjyGWp5Gfo2AGQ9pgW3JMHefHMMXqF2uB9pT7PRL873gGfMG1WE3W+loFpDYPgg5TQvDifDP+cnlEdT/30JROFBbJ6sJro5la+7vZT/Yd9JOyNSvjizSsqLyva/t1zhQ2Bb37xGJOgVoRc1Hj+fYe1+jaD2ebtGWWIykvfIb33tpoBg3KkN01rrniTiVD8t1yNPGxc9VecqJoK5QJOCZ6zpjeFtvmiZwdd9bgfznQ== ondrejj@work.salstar.sk
+EOF
+SSH_USE_STRONG_RNG=0
+AUTOCREATE_SERVER_KEYS=RSAONLY
+sshd-keygen
+/usr/sbin/sshd
+%end

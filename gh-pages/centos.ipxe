@@ -1,0 +1,7 @@
+#!ipxe
+
+set menu centos
+set os CentOS
+imgverify fedora.ipxe ${sigs}fedora.ipxe.sig
+chain fedora.ipxe
+exit

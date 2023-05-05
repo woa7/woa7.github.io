@@ -1,0 +1,5 @@
+#!ipxe
+
+set menu fedora
+set ver 16
+set bt ks

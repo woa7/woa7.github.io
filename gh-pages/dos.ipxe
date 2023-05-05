@@ -1,0 +1,75 @@
+#!ipxe
+
+:dos_menu
+menu FreeDOS
+item --key f fdubcd UBCD FreeDOS R1.53 (Based on NwDsk V3.40) [f]
+item --key u ubcd UBCD 5.3.8 - Ultimate boot CD [u]
+item --key i install FreeDOS 1.2 src (installation iso) [i]
+item --key c custom_iso Boot custom CDROM ISO image [c]
+item --key d custom_img Boot custom FD/HDD image [d]
+#item --key x exit Exit to main menu [x]
+choose value || goto boot_dos_exit
+echo ${cls}
+goto boot_dos_${value}
+
+:boot_dos_exit
+exit 0
+
+:boot_dos_install
+set dir mirrors/images
+set iso FD12CD.iso
+imgfree
+kernel ${url}memdisk iso ${params}
+imgverify memdisk ${sigs}memdisk.sig
+initrd ${mirror}/${dir}/${iso}
+imgverify ${iso} ${sigs}${dir}/${iso}.sig
+#imgtrust --allow
+#sanboot ${mirror}/${dir}/${iso}
+boot
+
+:boot_dos_custom_iso
+imgfree
+kernel ${url}memdisk iso ${params}
+imgverify memdisk ${sigs}memdisk.sig
+goto enter_path
+
+:boot_dos_custom_img
+imgfree
+kernel ${url}memdisk ${params}
+imgverify memdisk ${sigs}memdisk.sig
+goto enter_path
+
+:enter_path
+echo -n Enter image URL: ${}
+read imgurl
+isset ${imgurl} || goto dos_menu
+imgtrust --allow
+initrd ${imgurl} || goto enter_path
+boot
+
+:boot_dos_ubcd
+set dir mirrors/images
+set iso ubcd538.iso
+imgfree
+kernel ${url}memdisk iso keeppxe ${params}
+imgverify memdisk ${sigs}memdisk.sig
+initrd ${mirror}/${dir}/${iso}
+imgverify ${iso} ${sigs}${dir}/${iso}.sig
+#sanboot ${mirror}/${dir}/${iso}
+boot
+
+:boot_dos_fdubcd
+set dir mirrors/images
+set img fdubcd.img
+imgfree
+kernel ${url}memdisk raw keeppxe ${params}
+imgverify memdisk ${sigs}memdisk.sig
+initrd ${mirror}/${dir}/${img}
+imgverify ${img} ${sigs}${dir}/${img}.sig
+boot
+#set url http://boot.salstar.sk/
+#echo HOOK
+#sanhook --no-describe ${mirror}/${dir}/${img}
+#echo BOOTING
+#sanboot
+#echo END

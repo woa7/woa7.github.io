@@ -1,0 +1,6 @@
+#ErrorDocument 404 /ks/error.php
+#RedirectMatch ^/ks/fedora(.*)$ /ks/gen.php$1
+
+# Allow detailed centos version
+RewriteEngine On
+RewriteRule ^centos7\.[0-9.]*$ centos7 [L]

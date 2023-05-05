@@ -1,0 +1,9 @@
+#!ipxe
+
+# http://www.advancedclustering.com/software/breakin.html
+
+kernel ${url}memdisk iso ${params}
+imgverify memdisk ${sigs}memdisk.sig
+initrd http://www.advancedclustering.com/download-document/21-bootimage-includes-breakin-v3-for-x86_64-bootable-iso.html
+boot
+

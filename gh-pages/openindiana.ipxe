@@ -1,0 +1,30 @@
+#!ipxe
+
+# https://www.openindiana.org/sk/download/
+# EXPERIMENTAL!
+
+#set mirror http://dlc.openindiana.org
+#set mirror http://ftp.gtlib.gatech.edu/pub/OpenIndiana/dlc
+#set mirror http://mirror.math.princeton.edu/pub/openindiana
+set mirror http://mirrors.dotsrc.org/openindiana
+
+set os OpenIndiana
+set version hipster
+set release 20190511
+
+menu ${os} select image
+item gui ${os} Live DVD (gui)
+item text ${os} Text install DVD
+item minimal ${os} Minimal install DVD
+choose image || set image gui
+
+set iso ${mirror}/isos/${version}/latest/OI-${version}-${image}-${release}.iso
+
+sanboot ${iso}
+
+imgtrust --allow
+#kernel ${url}memdisk iso raw ${params}
+kernel ${url}memdisk ${params}
+imgverify memdisk ${sigs}memdisk.sig
+initrd ${iso}
+boot

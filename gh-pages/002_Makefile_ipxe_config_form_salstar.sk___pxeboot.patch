@@ -1,0 +1,2567 @@
+From 20cb1df963722f394c4c1cc4b0c93b4710b620c8 Mon Sep 17 00:00:00 2001
+From: ondrejj <ondrejj@c21728ea-8e09-0410-9ecb-e72249775932>
+Date: Thu, 12 Apr 2012 17:15:15 +0000
+Subject: [PATCH] update
+
+git-svn-id: file:///var/svn/pxeboot@2938 c21728ea-8e09-0410-9ecb-e72249775932
+---
+ Makefile | 66 ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+ 1 file changed, 66 insertions(+)
+
+diff --git a/Makefile b/Makefile
+new file mode 100644
+index 0000000000000000000000000000000000000000..b765a4b6bec1e4ff240a64497fc4ad22aa7d636f
+--- /dev/null
++++ b/Makefile
+@@ -0,0 +1,66 @@
++IPXEDIR=../../c/ipxe/src
++TARGETS=bin/ipxe.lkrn bin/ipxe.kpxe bin/ipxe.iso bin/ipxe.usb bin/undionly.kpxe
++MEM=768
++NETMODEL=virtio
++NET=-net nic,model=$(NETMODEL) -net user,hostfwd=tcp::2222-:22
++USB=-usb -usbdevice tablet
++BOOTFILE=ipxe/ipxe.kpxe
++UNAME=$(shell uname -r)
++C32S=hdt menu sysdump
++
++all:	images/modules.cgz compile sigs rsync
++
++.PHONY:	all sigs rsync compile c32s
++
++rsync:	images/modules.cgz compile
++	rsync -avPH --inplace --delete ./ ftp:public_html/pxe/ \
++	  --exclude='**/.svn'
++	# to tftp server for dhcp boot
++	rsync -avPH --inplace ipxe/ipxe.* ftp:/var/lib/tftpboot/ipxe/
++
++sigs:
++	make -C sigs
++
++compile:	c32s
++	make -j1 -C $(IPXEDIR) EMBEDDED_IMAGE=`pwd`/link.ipxe \
++		TRUST=`pwd`/certs/upjs.pem,`pwd`/certs/terena.pem \
++		$(TARGETS)
++	for i in $(TARGETS); do \
++		cp -a $(IPXEDIR)/$$i ipxe/; \
++	done
++
++images/modules.cgz: images/pmagic/scripts/*
++	cd images/pmagic; \
++	find scripts modules | grep -v '/\.svn' \
++		| cpio --quiet -H newc -o | gzip -9 \
++		> ../../$@
++
++test:	all
++	qemu-kvm -m $(MEM) -kernel ipxe/ipxe.lkrn $(USB) $(NET) $(ARGS)
++
++undi:	all
++	qemu-kvm -m $(MEM) $(NET),tftp=`pwd`,bootfile=$(BOOTFILE) $(USB) $(ARGS)
++
++#freedos:
++#	zip /tmp/fd11live.img.zip fd11live.img
++#	rsync -avP ./fd11live.img /tmp/fd11live.img.zip \
++#		mirror@ftp:/home/ftp/pub/mirrors/freedos/1.1/
++#	gzip -c1 fd11live.img | ssh mirror@ftp \
++#		dd of=/home/ftp/pub/mirrors/freedos/1.1/fd11live.img.gz
++
++pci.ids:	/usr/share/hwdata/pci.ids
++	cp -a $< $@
++
++modules.pcimap:	/lib/modules/$(UNAME)/modules.pcimap
++	cp -a $< $@
++
++modules.alias:	/lib/modules/$(UNAME)/modules.alias
++	cp -a $< $@
++
++pxelinux.0:	/usr/share/syslinux/pxelinux.0
++	cp -a $< $@
++
++pxelinux.cfg/%.c32:	/usr/share/syslinux/%.c32
++	cp -a $< $@
++
++c32s:	pci.ids modules.pcimap modules.alias pxelinux.0 $(C32S:%=pxelinux.cfg/%.c32)
+
+From afa5c4608abf967af3c854032043308cda7fece7 Mon Sep 17 00:00:00 2001
+From: ondrejj <ondrejj@c21728ea-8e09-0410-9ecb-e72249775932>
+Date: Sat, 14 Apr 2012 20:53:26 +0000
+Subject: [PATCH] update
+
+git-svn-id: file:///var/svn/pxeboot@2940 c21728ea-8e09-0410-9ecb-e72249775932
+---
+ Makefile | 44 ++++++++++++++++++++++++++++----------------
+ 1 file changed, 28 insertions(+), 16 deletions(-)
+
+diff --git a/Makefile b/Makefile
+index b765a4b6bec1e4ff240a64497fc4ad22aa7d636f..ef13ed609f60b43c229f528b5bc3346428a01a48 100644
+--- a/Makefile
++++ b/Makefile
+@@ -3,25 +3,31 @@ TARGETS=bin/ipxe.lkrn bin/ipxe.kpxe bin/ipxe.iso bin/ipxe.usb bin/undionly.kpxe
+ MEM=768
+ NETMODEL=virtio
+ NET=-net nic,model=$(NETMODEL) -net user,hostfwd=tcp::2222-:22
+-USB=-usb -usbdevice tablet
++PARAMS=-usb -usbdevice tablet -vga std
++SCRIPT=script.ipxe
+ BOOTFILE=ipxe/ipxe.kpxe
+ UNAME=$(shell uname -r)
++MEMTEST_VERSION=$(shell awk '/^set memtest_version / { print $$3 }' $(SCRIPT))
+ C32S=hdt menu sysdump
+ 
+-all:	images/modules.cgz compile sigs rsync
++all:	rsync
+ 
+-.PHONY:	all sigs rsync compile c32s
++.PHONY:	all clean sigs rsync compile syslinux
+ 
+-rsync:	images/modules.cgz compile
++clean:
++	+make -C sigs clean
++
++sigs:
++	+make -C sigs
++
++rsync:	images/modules.cgz compile sigs
+ 	rsync -avPH --inplace --delete ./ ftp:public_html/pxe/ \
+ 	  --exclude='**/.svn'
+ 	# to tftp server for dhcp boot
+-	rsync -avPH --inplace ipxe/ipxe.* ftp:/var/lib/tftpboot/ipxe/
+-
+-sigs:
+-	make -C sigs
++	rsync -avPH --inplace ipxe/*pxe ftp:/var/lib/tftpboot/ipxe/
++	cd kickstart; ./rsync
+ 
+-compile:	c32s
++compile:	syslinux
+ 	make -j1 -C $(IPXEDIR) EMBEDDED_IMAGE=`pwd`/link.ipxe \
+ 		TRUST=`pwd`/certs/upjs.pem,`pwd`/certs/terena.pem \
+ 		$(TARGETS)
+@@ -36,10 +42,10 @@ images/modules.cgz: images/pmagic/scripts/*
+ 		> ../../$@
+ 
+ test:	all
+-	qemu-kvm -m $(MEM) -kernel ipxe/ipxe.lkrn $(USB) $(NET) $(ARGS)
++	qemu-kvm -m $(MEM) -kernel ipxe/ipxe.lkrn $(PARAMS) $(NET) $(ARGS)
+ 
+ undi:	all
+-	qemu-kvm -m $(MEM) $(NET),tftp=`pwd`,bootfile=$(BOOTFILE) $(USB) $(ARGS)
++	qemu-kvm -m $(MEM) $(NET),tftp=`pwd`,bootfile=$(BOOTFILE) $(PARAMS) $(ARGS)
+ 
+ #freedos:
+ #	zip /tmp/fd11live.img.zip fd11live.img
+@@ -48,19 +54,25 @@ undi:	all
+ #	gzip -c1 fd11live.img | ssh mirror@ftp \
+ #		dd of=/home/ftp/pub/mirrors/freedos/1.1/fd11live.img.gz
+ 
+-pci.ids:	/usr/share/hwdata/pci.ids
++pxelinux.cfg/pci.ids:	/usr/share/hwdata/pci.ids
+ 	cp -a $< $@
+ 
+-modules.pcimap:	/lib/modules/$(UNAME)/modules.pcimap
++pxelinux.cfg/modules.pcimap:	/lib/modules/$(UNAME)/modules.pcimap
+ 	cp -a $< $@
+ 
+-modules.alias:	/lib/modules/$(UNAME)/modules.alias
++pxelinux.cfg/modules.alias:	/lib/modules/$(UNAME)/modules.alias
+ 	cp -a $< $@
+ 
+-pxelinux.0:	/usr/share/syslinux/pxelinux.0
++pxelinux.cfg/pxelinux.0:	/usr/share/syslinux/pxelinux.0
+ 	cp -a $< $@
+ 
+ pxelinux.cfg/%.c32:	/usr/share/syslinux/%.c32
+ 	cp -a $< $@
+ 
+-c32s:	pci.ids modules.pcimap modules.alias pxelinux.0 $(C32S:%=pxelinux.cfg/%.c32)
++memdisk:	/usr/share/syslinux/memdisk
++	cp -a $< $@
++
++images/memtest:	/boot/memtest86+-$(MEMTEST_VERSION)
++	cp -a $< $@
++
++syslinux:	memdisk images/memtest pxelinux.cfg/pci.ids pxelinux.cfg/modules.pcimap pxelinux.cfg/modules.alias pxelinux.cfg/pxelinux.0 $(C32S:%=pxelinux.cfg/%.c32)
+
+From ee3e6a1fb4bb49d1d0d4af49e466c9f8694e319f Mon Sep 17 00:00:00 2001
+From: ondrejj <ondrejj@c21728ea-8e09-0410-9ecb-e72249775932>
+Date: Sat, 21 Apr 2012 05:25:13 +0000
+Subject: [PATCH] update
+
+git-svn-id: file:///var/svn/pxeboot@2958 c21728ea-8e09-0410-9ecb-e72249775932
+---
+ Makefile | 4 +++-
+ 1 file changed, 3 insertions(+), 1 deletion(-)
+
+diff --git a/Makefile b/Makefile
+index ef13ed609f60b43c229f528b5bc3346428a01a48..914ef8826434f1b8c95403c21973995128d67e15 100644
+--- a/Makefile
++++ b/Makefile
+@@ -41,9 +41,11 @@ images/modules.cgz: images/pmagic/scripts/*
+ 		| cpio --quiet -H newc -o | gzip -9 \
+ 		> ../../$@
+ 
+-test:	all
++boot:	all
+ 	qemu-kvm -m $(MEM) -kernel ipxe/ipxe.lkrn $(PARAMS) $(NET) $(ARGS)
+ 
++test:	boot
++
+ undi:	all
+ 	qemu-kvm -m $(MEM) $(NET),tftp=`pwd`,bootfile=$(BOOTFILE) $(PARAMS) $(ARGS)
+ 
+
+From e9b51a794feefee70df2079553278e49fa82d09a Mon Sep 17 00:00:00 2001
+From: ondrejj <ondrejj@c21728ea-8e09-0410-9ecb-e72249775932>
+Date: Fri, 27 Apr 2012 18:57:53 +0000
+Subject: [PATCH] update
+
+git-svn-id: file:///var/svn/pxeboot@2970 c21728ea-8e09-0410-9ecb-e72249775932
+---
+ Makefile | 14 ++++++++++----
+ 1 file changed, 10 insertions(+), 4 deletions(-)
+
+diff --git a/Makefile b/Makefile
+index 914ef8826434f1b8c95403c21973995128d67e15..7017201a0ada331c1589a20386e75c084ada244d 100644
+--- a/Makefile
++++ b/Makefile
+@@ -1,8 +1,15 @@
+ IPXEDIR=../../c/ipxe/src
+-TARGETS=bin/ipxe.lkrn bin/ipxe.kpxe bin/ipxe.iso bin/ipxe.usb bin/undionly.kpxe
++TARGETS=\
++	bin/ipxe.lkrn\
++	bin/ipxe.kpxe\
++	bin/ipxe.iso\
++	bin/ipxe.usb\
++	bin/undionly.kpxe\
++	#bin/virtio-net.rom
+ MEM=768
+ NETMODEL=virtio
+ NET=-net nic,model=$(NETMODEL) -net user,hostfwd=tcp::2222-:22
++#OPTION_ROM=-option-rom $(IPXEDIR)/bin/virtio-net.rom
+ PARAMS=-usb -usbdevice tablet -vga std
+ SCRIPT=script.ipxe
+ BOOTFILE=ipxe/ipxe.kpxe
+@@ -42,9 +49,8 @@ images/modules.cgz: images/pmagic/scripts/*
+ 		> ../../$@
+ 
+ boot:	all
+-	qemu-kvm -m $(MEM) -kernel ipxe/ipxe.lkrn $(PARAMS) $(NET) $(ARGS)
+-
+-test:	boot
++	qemu-kvm -m $(MEM) -kernel ipxe/ipxe.lkrn \
++		$(PARAMS) $(OPTION_ROM) $(NET) $(ARGS)
+ 
+ undi:	all
+ 	qemu-kvm -m $(MEM) $(NET),tftp=`pwd`,bootfile=$(BOOTFILE) $(PARAMS) $(ARGS)
+
+From f2bbd4cf2c38cc3f3672a8c45cb14bcde2f6168d Mon Sep 17 00:00:00 2001
+From: ondrejj <ondrejj@c21728ea-8e09-0410-9ecb-e72249775932>
+Date: Sat, 28 Apr 2012 20:49:59 +0000
+Subject: [PATCH] update
+
+git-svn-id: file:///var/svn/pxeboot@2972 c21728ea-8e09-0410-9ecb-e72249775932
+---
+ Makefile | 8 +++++---
+ 1 file changed, 5 insertions(+), 3 deletions(-)
+
+diff --git a/Makefile b/Makefile
+index 7017201a0ada331c1589a20386e75c084ada244d..8a86dd575044b1e3c6594f0fff95d341b908dc30 100644
+--- a/Makefile
++++ b/Makefile
+@@ -7,12 +7,13 @@ TARGETS=\
+ 	bin/undionly.kpxe\
+ 	#bin/virtio-net.rom
+ MEM=768
++DISPLAY=sdl
+ NETMODEL=virtio
+ NET=-net nic,model=$(NETMODEL) -net user,hostfwd=tcp::2222-:22
+ #OPTION_ROM=-option-rom $(IPXEDIR)/bin/virtio-net.rom
+ PARAMS=-usb -usbdevice tablet -vga std
+ SCRIPT=script.ipxe
+-BOOTFILE=ipxe/ipxe.kpxe
++BOOTFILE=ipxe/undionly.kpxe
+ UNAME=$(shell uname -r)
+ MEMTEST_VERSION=$(shell awk '/^set memtest_version / { print $$3 }' $(SCRIPT))
+ C32S=hdt menu sysdump
+@@ -50,10 +51,11 @@ images/modules.cgz: images/pmagic/scripts/*
+ 
+ boot:	all
+ 	qemu-kvm -m $(MEM) -kernel ipxe/ipxe.lkrn \
+-		$(PARAMS) $(OPTION_ROM) $(NET) $(ARGS)
++		$(PARAMS) $(OPTION_ROM) $(NET) -display $(DISPLAY) $(ARGS)
+ 
+ undi:	all
+-	qemu-kvm -m $(MEM) $(NET),tftp=`pwd`,bootfile=$(BOOTFILE) $(PARAMS) $(ARGS)
++	qemu-kvm -m $(MEM) $(NET),tftp=`pwd`,bootfile=$(BOOTFILE) \
++		-display $(DISPLAY) $(PARAMS) $(ARGS)
+ 
+ #freedos:
+ #	zip /tmp/fd11live.img.zip fd11live.img
+
+From 3685b3dfc6145a2f603f4dc4ac40f53256d4701b Mon Sep 17 00:00:00 2001
+From: ondrejj <ondrejj@c21728ea-8e09-0410-9ecb-e72249775932>
+Date: Mon, 7 May 2012 17:34:19 +0000
+Subject: [PATCH] update
+
+git-svn-id: file:///var/svn/pxeboot@2974 c21728ea-8e09-0410-9ecb-e72249775932
+---
+ Makefile | 19 ++++++++++++-------
+ 1 file changed, 12 insertions(+), 7 deletions(-)
+
+diff --git a/Makefile b/Makefile
+index 8a86dd575044b1e3c6594f0fff95d341b908dc30..59f3475c3c239902c85aa36582fbca9acd2160c3 100644
+--- a/Makefile
++++ b/Makefile
+@@ -7,15 +7,16 @@ TARGETS=\
+ 	bin/undionly.kpxe\
+ 	#bin/virtio-net.rom
+ MEM=768
+-DISPLAY=sdl
++OUT=sdl
++MONITOR=stdio
+ NETMODEL=virtio
+ NET=-net nic,model=$(NETMODEL) -net user,hostfwd=tcp::2222-:22
+ #OPTION_ROM=-option-rom $(IPXEDIR)/bin/virtio-net.rom
+-PARAMS=-usb -usbdevice tablet -vga std
+-SCRIPT=script.ipxe
++PARAMS=-usb -usbdevice tablet -vga cirrus
++MAIN_SCRIPT=menu.ipxe
+ BOOTFILE=ipxe/undionly.kpxe
+ UNAME=$(shell uname -r)
+-MEMTEST_VERSION=$(shell awk '/^set memtest_version / { print $$3 }' $(SCRIPT))
++MEMTEST_VERSION=$(shell	awk '/^set memtest_version / { print $$3 }' $(MAIN_SCRIPT))
+ C32S=hdt menu sysdump
+ 
+ all:	rsync
+@@ -50,12 +51,16 @@ images/modules.cgz: images/pmagic/scripts/*
+ 		> ../../$@
+ 
+ boot:	all
+-	qemu-kvm -m $(MEM) -kernel ipxe/ipxe.lkrn \
+-		$(PARAMS) $(OPTION_ROM) $(NET) -display $(DISPLAY) $(ARGS)
++	qemu-kvm -m $(MEM) -kernel ipxe/ipxe.lkrn -monitor $(MONITOR) \
++		$(PARAMS) $(OPTION_ROM) $(NET) -display $(OUT) $(ARGS)
++	@echo ""
++
++textboot:
++	-make boot OUT=curses MONITOR=vc
+ 
+ undi:	all
+ 	qemu-kvm -m $(MEM) $(NET),tftp=`pwd`,bootfile=$(BOOTFILE) \
+-		-display $(DISPLAY) $(PARAMS) $(ARGS)
++		-display $(OUT) $(PARAMS) $(ARGS)
+ 
+ #freedos:
+ #	zip /tmp/fd11live.img.zip fd11live.img
+
+From 71cfdf28c42e62e7474396b2046b700470c1dd88 Mon Sep 17 00:00:00 2001
+From: ondrejj <ondrejj@c21728ea-8e09-0410-9ecb-e72249775932>
+Date: Tue, 8 May 2012 20:36:07 +0000
+Subject: [PATCH] update
+
+git-svn-id: file:///var/svn/pxeboot@2975 c21728ea-8e09-0410-9ecb-e72249775932
+---
+ Makefile | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/Makefile b/Makefile
+index 59f3475c3c239902c85aa36582fbca9acd2160c3..adbaae60c23b6422c039375ef3f015c2c0817a56 100644
+--- a/Makefile
++++ b/Makefile
+@@ -37,7 +37,7 @@ rsync:	images/modules.cgz compile sigs
+ 	cd kickstart; ./rsync
+ 
+ compile:	syslinux
+-	make -j1 -C $(IPXEDIR) EMBEDDED_IMAGE=`pwd`/link.ipxe \
++	-make -j1 -C $(IPXEDIR) EMBEDDED_IMAGE=`pwd`/link.ipxe \
+ 		TRUST=`pwd`/certs/upjs.pem,`pwd`/certs/terena.pem \
+ 		$(TARGETS)
+ 	for i in $(TARGETS); do \
+
+From 29bb467990fc88131a36ee5a1a72308de5b29e92 Mon Sep 17 00:00:00 2001
+From: ondrejj <ondrejj@c21728ea-8e09-0410-9ecb-e72249775932>
+Date: Fri, 11 May 2012 18:01:24 +0000
+Subject: [PATCH] update
+
+git-svn-id: file:///var/svn/pxeboot@2977 c21728ea-8e09-0410-9ecb-e72249775932
+---
+ Makefile | 6 +++---
+ 1 file changed, 3 insertions(+), 3 deletions(-)
+
+diff --git a/Makefile b/Makefile
+index adbaae60c23b6422c039375ef3f015c2c0817a56..5407678a5ba411ac5316fcf71c407afdb0ec5330 100644
+--- a/Makefile
++++ b/Makefile
+@@ -34,12 +34,12 @@ rsync:	images/modules.cgz compile sigs
+ 	  --exclude='**/.svn'
+ 	# to tftp server for dhcp boot
+ 	rsync -avPH --inplace ipxe/*pxe ftp:/var/lib/tftpboot/ipxe/
+-	cd kickstart; ./rsync
++	#cd kickstart; ./rsync
+ 
++TRUST=$(shell find `pwd`/certs/ -name \*.crt -o -name \*.pem | tr '\n' ',')
+ compile:	syslinux
+ 	-make -j1 -C $(IPXEDIR) EMBEDDED_IMAGE=`pwd`/link.ipxe \
+-		TRUST=`pwd`/certs/upjs.pem,`pwd`/certs/terena.pem \
+-		$(TARGETS)
++		TRUST=$(TRUST) $(TARGETS)
+ 	for i in $(TARGETS); do \
+ 		cp -a $(IPXEDIR)/$$i ipxe/; \
+ 	done
+
+From 937e2e163c783cd3cbddda8693691de07186be75 Mon Sep 17 00:00:00 2001
+From: ondrejj <ondrejj@c21728ea-8e09-0410-9ecb-e72249775932>
+Date: Sun, 20 May 2012 16:04:23 +0000
+Subject: [PATCH] update
+
+git-svn-id: file:///var/svn/pxeboot@2978 c21728ea-8e09-0410-9ecb-e72249775932
+---
+ Makefile | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/Makefile b/Makefile
+index 5407678a5ba411ac5316fcf71c407afdb0ec5330..389ddf789cebc74443dcc845ad4acb99b1167b3a 100644
+--- a/Makefile
++++ b/Makefile
+@@ -38,7 +38,7 @@ rsync:	images/modules.cgz compile sigs
+ 
+ TRUST=$(shell find `pwd`/certs/ -name \*.crt -o -name \*.pem | tr '\n' ',')
+ compile:	syslinux
+-	-make -j1 -C $(IPXEDIR) EMBEDDED_IMAGE=`pwd`/link.ipxe \
++	-make -j1 -C $(IPXEDIR) NO_WERROR=1 EMBEDDED_IMAGE=`pwd`/link.ipxe \
+ 		TRUST=$(TRUST) $(TARGETS)
+ 	for i in $(TARGETS); do \
+ 		cp -a $(IPXEDIR)/$$i ipxe/; \
+
+From 283004d8eb3d8e7b26c2fa86de224e0e0138df58 Mon Sep 17 00:00:00 2001
+From: ondrejj <ondrejj@c21728ea-8e09-0410-9ecb-e72249775932>
+Date: Wed, 23 May 2012 05:44:44 +0000
+Subject: [PATCH] update
+
+git-svn-id: file:///var/svn/pxeboot@2979 c21728ea-8e09-0410-9ecb-e72249775932
+---
+ Makefile | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/Makefile b/Makefile
+index 389ddf789cebc74443dcc845ad4acb99b1167b3a..8207bc6d231d3f2a7ef10ace27e9cccd7cca977c 100644
+--- a/Makefile
++++ b/Makefile
+@@ -30,7 +30,7 @@ sigs:
+ 	+make -C sigs
+ 
+ rsync:	images/modules.cgz compile sigs
+-	rsync -avPH --inplace --delete ./ ftp:public_html/pxe/ \
++	rsync -avPH --inplace --delete ./ ftp:public_html/boot/ \
+ 	  --exclude='**/.svn'
+ 	# to tftp server for dhcp boot
+ 	rsync -avPH --inplace ipxe/*pxe ftp:/var/lib/tftpboot/ipxe/
+
+From e4489df2e7cd41337959f48dd9e8d31fc8007768 Mon Sep 17 00:00:00 2001
+From: ondrejj <ondrejj@c21728ea-8e09-0410-9ecb-e72249775932>
+Date: Wed, 30 May 2012 06:26:58 +0000
+Subject: [PATCH] update
+
+git-svn-id: file:///var/svn/pxeboot@2985 c21728ea-8e09-0410-9ecb-e72249775932
+---
+ Makefile | 9 +++++----
+ 1 file changed, 5 insertions(+), 4 deletions(-)
+
+diff --git a/Makefile b/Makefile
+index 8207bc6d231d3f2a7ef10ace27e9cccd7cca977c..dece5f9df84043e1d7cd8589877b3a7f1d40b7bd 100644
+--- a/Makefile
++++ b/Makefile
+@@ -72,10 +72,10 @@ undi:	all
+ pxelinux.cfg/pci.ids:	/usr/share/hwdata/pci.ids
+ 	cp -a $< $@
+ 
+-pxelinux.cfg/modules.pcimap:	/lib/modules/$(UNAME)/modules.pcimap
++pxelinux.cfg/modules.pcimap:	/usr/lib/modules/$(UNAME)/modules.pcimap
+ 	cp -a $< $@
+ 
+-pxelinux.cfg/modules.alias:	/lib/modules/$(UNAME)/modules.alias
++pxelinux.cfg/modules.alias:	/usr/lib/modules/$(UNAME)/modules.alias
+ 	cp -a $< $@
+ 
+ pxelinux.cfg/pxelinux.0:	/usr/share/syslinux/pxelinux.0
+@@ -87,7 +87,8 @@ pxelinux.cfg/%.c32:	/usr/share/syslinux/%.c32
+ memdisk:	/usr/share/syslinux/memdisk
+ 	cp -a $< $@
+ 
+-images/memtest:	/boot/memtest86+-$(MEMTEST_VERSION)
++images/memtest:	/boot/elf-memtest86+-$(MEMTEST_VERSION)
+ 	cp -a $< $@
++	touch $@
+ 
+-syslinux:	memdisk images/memtest pxelinux.cfg/pci.ids pxelinux.cfg/modules.pcimap pxelinux.cfg/modules.alias pxelinux.cfg/pxelinux.0 $(C32S:%=pxelinux.cfg/%.c32)
++syslinux:	memdisk pxelinux.cfg/pci.ids pxelinux.cfg/modules.alias pxelinux.cfg/pxelinux.0 $(C32S:%=pxelinux.cfg/%.c32)
+
+From 9169503d6b1cb9df14dd2bc4776ef64de98499db Mon Sep 17 00:00:00 2001
+From: ondrejj <ondrejj@c21728ea-8e09-0410-9ecb-e72249775932>
+Date: Sat, 7 Jul 2012 04:12:26 +0000
+Subject: [PATCH] update
+
+git-svn-id: file:///var/svn/pxeboot@3016 c21728ea-8e09-0410-9ecb-e72249775932
+---
+ Makefile | 4 ++--
+ 1 file changed, 2 insertions(+), 2 deletions(-)
+
+diff --git a/Makefile b/Makefile
+index dece5f9df84043e1d7cd8589877b3a7f1d40b7bd..9f04030eceed4e9f972dcaa057eaa2e37b4892c0 100644
+--- a/Makefile
++++ b/Makefile
+@@ -38,8 +38,8 @@ rsync:	images/modules.cgz compile sigs
+ 
+ TRUST=$(shell find `pwd`/certs/ -name \*.crt -o -name \*.pem | tr '\n' ',')
+ compile:	syslinux
+-	-make -j1 -C $(IPXEDIR) NO_WERROR=1 EMBEDDED_IMAGE=`pwd`/link.ipxe \
+-		TRUST=$(TRUST) $(TARGETS)
++	-make -j1 -C $(IPXEDIR) EMBEDDED_IMAGE=`pwd`/link.ipxe \
++		TRUST=$(TRUST) $(TARGETS) NO_WERROR=1
+ 	for i in $(TARGETS); do \
+ 		cp -a $(IPXEDIR)/$$i ipxe/; \
+ 	done
+
+From 48fc29276c41de345ff7c689374ccfe52cab1016 Mon Sep 17 00:00:00 2001
+From: ondrejj <ondrejj@c21728ea-8e09-0410-9ecb-e72249775932>
+Date: Fri, 3 Aug 2012 07:46:48 +0000
+Subject: [PATCH] update
+
+git-svn-id: file:///var/svn/pxeboot@3031 c21728ea-8e09-0410-9ecb-e72249775932
+---
+ Makefile | 6 +++++-
+ 1 file changed, 5 insertions(+), 1 deletion(-)
+
+diff --git a/Makefile b/Makefile
+index 9f04030eceed4e9f972dcaa057eaa2e37b4892c0..8ab57852f0bc58dc840edc39cd8d755531ffc87e 100644
+--- a/Makefile
++++ b/Makefile
+@@ -18,6 +18,9 @@ BOOTFILE=ipxe/undionly.kpxe
+ UNAME=$(shell uname -r)
+ MEMTEST_VERSION=$(shell	awk '/^set memtest_version / { print $$3 }' $(MAIN_SCRIPT))
+ C32S=hdt menu sysdump
++NON_AUTO_SRCS=\
++	drivers/net/bnx2.c \
++	#drivers/net/prism2.c
+ 
+ all:	rsync
+ 
+@@ -39,7 +42,8 @@ rsync:	images/modules.cgz compile sigs
+ TRUST=$(shell find `pwd`/certs/ -name \*.crt -o -name \*.pem | tr '\n' ',')
+ compile:	syslinux
+ 	-make -j1 -C $(IPXEDIR) EMBEDDED_IMAGE=`pwd`/link.ipxe \
+-		TRUST=$(TRUST) $(TARGETS) NO_WERROR=1
++		TRUST=$(TRUST) $(TARGETS) NO_WERROR=1 \
++		NON_AUTO_SRCS=$(NON_AUTO_SRCS)
+ 	for i in $(TARGETS); do \
+ 		cp -a $(IPXEDIR)/$$i ipxe/; \
+ 	done
+
+From 38e9e9e413133890ec17e4963b2a1533c2134337 Mon Sep 17 00:00:00 2001
+From: ondrejj <ondrejj@c21728ea-8e09-0410-9ecb-e72249775932>
+Date: Thu, 30 Aug 2012 18:34:15 +0000
+Subject: [PATCH] update
+
+git-svn-id: file:///var/svn/pxeboot@3062 c21728ea-8e09-0410-9ecb-e72249775932
+---
+ Makefile | 7 ++++---
+ 1 file changed, 4 insertions(+), 3 deletions(-)
+
+diff --git a/Makefile b/Makefile
+index 8ab57852f0bc58dc840edc39cd8d755531ffc87e..2fc4b700bf831e9a2b0e5ae8534471d3a3f0716c 100644
+--- a/Makefile
++++ b/Makefile
+@@ -12,7 +12,8 @@ MONITOR=stdio
+ NETMODEL=virtio
+ NET=-net nic,model=$(NETMODEL) -net user,hostfwd=tcp::2222-:22
+ #OPTION_ROM=-option-rom $(IPXEDIR)/bin/virtio-net.rom
+-PARAMS=-usb -usbdevice tablet -vga cirrus
++USB=-usb -usbdevice tablet
++PARAMS=
+ MAIN_SCRIPT=menu.ipxe
+ BOOTFILE=ipxe/undionly.kpxe
+ UNAME=$(shell uname -r)
+@@ -56,7 +57,7 @@ images/modules.cgz: images/pmagic/scripts/*
+ 
+ boot:	all
+ 	qemu-kvm -m $(MEM) -kernel ipxe/ipxe.lkrn -monitor $(MONITOR) \
+-		$(PARAMS) $(OPTION_ROM) $(NET) -display $(OUT) $(ARGS)
++		$(USB) $(PARAMS) $(OPTION_ROM) $(NET) -display $(OUT) $(ARGS)
+ 	@echo ""
+ 
+ textboot:
+@@ -64,7 +65,7 @@ textboot:
+ 
+ undi:	all
+ 	qemu-kvm -m $(MEM) $(NET),tftp=`pwd`,bootfile=$(BOOTFILE) \
+-		-display $(OUT) $(PARAMS) $(ARGS)
++		-display $(OUT) $(USB) $(PARAMS) $(ARGS)
+ 
+ #freedos:
+ #	zip /tmp/fd11live.img.zip fd11live.img
+
+From 5ff50b91f48e08dec8a5a885607f8f7ee4015577 Mon Sep 17 00:00:00 2001
+From: ondrejj <ondrejj@c21728ea-8e09-0410-9ecb-e72249775932>
+Date: Sun, 9 Sep 2012 16:21:28 +0000
+Subject: [PATCH] update
+
+git-svn-id: file:///var/svn/pxeboot@3077 c21728ea-8e09-0410-9ecb-e72249775932
+---
+ Makefile | 3 +--
+ 1 file changed, 1 insertion(+), 2 deletions(-)
+
+diff --git a/Makefile b/Makefile
+index 2fc4b700bf831e9a2b0e5ae8534471d3a3f0716c..5284042f48ba233d4ad740d82dbbe74cfa6c0790 100644
+--- a/Makefile
++++ b/Makefile
+@@ -35,10 +35,9 @@ sigs:
+ 
+ rsync:	images/modules.cgz compile sigs
+ 	rsync -avPH --inplace --delete ./ ftp:public_html/boot/ \
+-	  --exclude='**/.svn'
++	  --exclude='**/.svn' --exclude='**/rsync'
+ 	# to tftp server for dhcp boot
+ 	rsync -avPH --inplace ipxe/*pxe ftp:/var/lib/tftpboot/ipxe/
+-	#cd kickstart; ./rsync
+ 
+ TRUST=$(shell find `pwd`/certs/ -name \*.crt -o -name \*.pem | tr '\n' ',')
+ compile:	syslinux
+
+From d7a59295a187dc6b51f196799e19b2c891c80ead Mon Sep 17 00:00:00 2001
+From: ondrejj <ondrejj@c21728ea-8e09-0410-9ecb-e72249775932>
+Date: Tue, 2 Oct 2012 18:41:54 +0000
+Subject: [PATCH] update
+
+git-svn-id: file:///var/svn/pxeboot@3094 c21728ea-8e09-0410-9ecb-e72249775932
+---
+ Makefile | 3 ++-
+ 1 file changed, 2 insertions(+), 1 deletion(-)
+
+diff --git a/Makefile b/Makefile
+index 5284042f48ba233d4ad740d82dbbe74cfa6c0790..400999aeb3118c4eb61dca69e109d2d4f0df73c3 100644
+--- a/Makefile
++++ b/Makefile
+@@ -43,10 +43,11 @@ TRUST=$(shell find `pwd`/certs/ -name \*.crt -o -name \*.pem | tr '\n' ',')
+ compile:	syslinux
+ 	-make -j1 -C $(IPXEDIR) EMBEDDED_IMAGE=`pwd`/link.ipxe \
+ 		TRUST=$(TRUST) $(TARGETS) NO_WERROR=1 \
+-		NON_AUTO_SRCS=$(NON_AUTO_SRCS)
++		NON_AUTO_SRCS=$(NON_AUTO_SRCS) $(IPXE_OPTS)
+ 	for i in $(TARGETS); do \
+ 		cp -a $(IPXEDIR)/$$i ipxe/; \
+ 	done
++	cp -a $(IPXEDIR)/config/local/*.h ipxe/
+ 
+ images/modules.cgz: images/pmagic/scripts/*
+ 	cd images/pmagic; \
+
+From 841a8fa9a1587ffbd57888f0f7108a2f83de928f Mon Sep 17 00:00:00 2001
+From: ondrejj <ondrejj@c21728ea-8e09-0410-9ecb-e72249775932>
+Date: Mon, 15 Oct 2012 15:00:51 +0000
+Subject: [PATCH] update
+
+git-svn-id: file:///var/svn/pxeboot@3098 c21728ea-8e09-0410-9ecb-e72249775932
+---
+ Makefile | 9 ++++++---
+ 1 file changed, 6 insertions(+), 3 deletions(-)
+
+diff --git a/Makefile b/Makefile
+index 400999aeb3118c4eb61dca69e109d2d4f0df73c3..a14cf99021cc9e341891341922deee8a25ddc52d 100644
+--- a/Makefile
++++ b/Makefile
+@@ -6,22 +6,25 @@ TARGETS=\
+ 	bin/ipxe.usb\
+ 	bin/undionly.kpxe\
+ 	#bin/virtio-net.rom
+-MEM=768
++MEM=1024
+ OUT=sdl
+ MONITOR=stdio
+ NETMODEL=virtio
+ NET=-net nic,model=$(NETMODEL) -net user,hostfwd=tcp::2222-:22
+ #OPTION_ROM=-option-rom $(IPXEDIR)/bin/virtio-net.rom
+ USB=-usb -usbdevice tablet
+-PARAMS=
++PARAMS:=
+ MAIN_SCRIPT=menu.ipxe
+ BOOTFILE=ipxe/undionly.kpxe
+ UNAME=$(shell uname -r)
+ MEMTEST_VERSION=$(shell	awk '/^set memtest_version / { print $$3 }' $(MAIN_SCRIPT))
+ C32S=hdt menu sysdump
+ NON_AUTO_SRCS=\
+-	drivers/net/bnx2.c \
++	#drivers/net/bnx2.c \
+ 	#drivers/net/prism2.c
++IMGDIR=/opt/img/test
++DISKS="test.img"
++override PARAMS+=$(foreach disk,$(DISKS),-drive file=$(IMGDIR)/$(disk),cache=none,if=virtio)
+ 
+ all:	rsync
+ 
+
+From 42998a929f7ce9368b261f31c28f0ac4060cd73b Mon Sep 17 00:00:00 2001
+From: ondrejj <ondrejj@c21728ea-8e09-0410-9ecb-e72249775932>
+Date: Thu, 1 Nov 2012 07:30:29 +0000
+Subject: [PATCH] update
+
+git-svn-id: file:///var/svn/pxeboot@3118 c21728ea-8e09-0410-9ecb-e72249775932
+---
+ Makefile | 5 ++++-
+ 1 file changed, 4 insertions(+), 1 deletion(-)
+
+diff --git a/Makefile b/Makefile
+index a14cf99021cc9e341891341922deee8a25ddc52d..b9aa91d68bbf854cb5c59e6568f58ae69279c614 100644
+--- a/Makefile
++++ b/Makefile
+@@ -64,7 +64,10 @@ boot:	all
+ 	@echo ""
+ 
+ textboot:
+-	-make boot OUT=curses MONITOR=vc
++	+make boot OUT=curses MONITOR=vc
++
++wboot:
++	+make boot NET="$(NET) -net nic,vlan=1,model=e1000 -net user,vlan=1"
+ 
+ undi:	all
+ 	qemu-kvm -m $(MEM) $(NET),tftp=`pwd`,bootfile=$(BOOTFILE) \
+
+From a761a014075f46a2c76f0b8776269a2eff97f2f6 Mon Sep 17 00:00:00 2001
+From: ondrejj <ondrejj@c21728ea-8e09-0410-9ecb-e72249775932>
+Date: Sat, 3 Nov 2012 06:47:58 +0000
+Subject: [PATCH] update
+
+git-svn-id: file:///var/svn/pxeboot@3121 c21728ea-8e09-0410-9ecb-e72249775932
+---
+ Makefile | 6 +++---
+ 1 file changed, 3 insertions(+), 3 deletions(-)
+
+diff --git a/Makefile b/Makefile
+index b9aa91d68bbf854cb5c59e6568f58ae69279c614..08d96796ff5b8d23375ccd3c828063646dbaae5d 100644
+--- a/Makefile
++++ b/Makefile
+@@ -98,8 +98,8 @@ pxelinux.cfg/%.c32:	/usr/share/syslinux/%.c32
+ memdisk:	/usr/share/syslinux/memdisk
+ 	cp -a $< $@
+ 
+-images/memtest:	/boot/elf-memtest86+-$(MEMTEST_VERSION)
+-	cp -a $< $@
+-	touch $@
++#images/memtest:	/boot/elf-memtest86+-$(MEMTEST_VERSION)
++#	cp -a $< $@
++#	touch $@
+ 
+ syslinux:	memdisk pxelinux.cfg/pci.ids pxelinux.cfg/modules.alias pxelinux.cfg/pxelinux.0 $(C32S:%=pxelinux.cfg/%.c32)
+
+From b971e25c139120b40e1acd9660d25463571bd234 Mon Sep 17 00:00:00 2001
+From: ondrejj <ondrejj@c21728ea-8e09-0410-9ecb-e72249775932>
+Date: Tue, 13 Nov 2012 12:31:46 +0000
+Subject: [PATCH] update
+
+git-svn-id: file:///var/svn/pxeboot@3126 c21728ea-8e09-0410-9ecb-e72249775932
+---
+ Makefile | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/Makefile b/Makefile
+index 08d96796ff5b8d23375ccd3c828063646dbaae5d..b14f44dcc04c5026fc979f13d321529d99920f98 100644
+--- a/Makefile
++++ b/Makefile
+@@ -70,7 +70,7 @@ wboot:
+ 	+make boot NET="$(NET) -net nic,vlan=1,model=e1000 -net user,vlan=1"
+ 
+ undi:	all
+-	qemu-kvm -m $(MEM) $(NET),tftp=`pwd`,bootfile=$(BOOTFILE) \
++	qemu-kvm -m $(MEM) $(NET),tftp=`pwd`,bootfile=$(BOOTFILE) -boot n \
+ 		-display $(OUT) $(USB) $(PARAMS) $(ARGS)
+ 
+ #freedos:
+
+From 9314a835bb36813bb066e52f66cdd2d4144e1b26 Mon Sep 17 00:00:00 2001
+From: ondrejj <ondrejj@c21728ea-8e09-0410-9ecb-e72249775932>
+Date: Sat, 16 Mar 2013 09:27:07 +0000
+Subject: [PATCH] update
+
+git-svn-id: file:///var/svn/pxeboot@3256 c21728ea-8e09-0410-9ecb-e72249775932
+---
+ Makefile | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/Makefile b/Makefile
+index b14f44dcc04c5026fc979f13d321529d99920f98..9f62c928d088a11ae5cf4b156f459a45d61ff007 100644
+--- a/Makefile
++++ b/Makefile
+@@ -50,7 +50,7 @@ compile:	syslinux
+ 	for i in $(TARGETS); do \
+ 		cp -a $(IPXEDIR)/$$i ipxe/; \
+ 	done
+-	cp -a $(IPXEDIR)/config/local/*.h ipxe/
++	cp -a $(IPXEDIR)/config/local/*.h ipxe/config/
+ 
+ images/modules.cgz: images/pmagic/scripts/*
+ 	cd images/pmagic; \
+
+From 77d4a64dcdf01088766fb18f5fbbede32b8c081e Mon Sep 17 00:00:00 2001
+From: ondrejj <ondrejj@c21728ea-8e09-0410-9ecb-e72249775932>
+Date: Sat, 13 Apr 2013 19:20:35 +0000
+Subject: [PATCH] update
+
+git-svn-id: file:///var/svn/pxeboot@3294 c21728ea-8e09-0410-9ecb-e72249775932
+---
+ Makefile | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/Makefile b/Makefile
+index 9f62c928d088a11ae5cf4b156f459a45d61ff007..062f3cdfeb0f042773189e92fad208ba433e0335 100644
+--- a/Makefile
++++ b/Makefile
+@@ -42,7 +42,7 @@ rsync:	images/modules.cgz compile sigs
+ 	# to tftp server for dhcp boot
+ 	rsync -avPH --inplace ipxe/*pxe ftp:/var/lib/tftpboot/ipxe/
+ 
+-TRUST=$(shell find `pwd`/certs/ -name \*.crt -o -name \*.pem | tr '\n' ',')
++TRUST=$(shell find `pwd`/certs/ -name \*.crt -o -name \*.pem | xargs echo | tr ' ' ',')
+ compile:	syslinux
+ 	-make -j1 -C $(IPXEDIR) EMBEDDED_IMAGE=`pwd`/link.ipxe \
+ 		TRUST=$(TRUST) $(TARGETS) NO_WERROR=1 \
+
+From 774e2ea825db4f9d6916ff89cc957eba32f0043d Mon Sep 17 00:00:00 2001
+From: ondrejj <ondrejj@c21728ea-8e09-0410-9ecb-e72249775932>
+Date: Fri, 9 Aug 2013 19:39:05 +0000
+Subject: [PATCH] update
+
+git-svn-id: file:///var/svn/pxeboot@3403 c21728ea-8e09-0410-9ecb-e72249775932
+---
+ Makefile | 28 +++++++++++++++++++++++++++-
+ 1 file changed, 27 insertions(+), 1 deletion(-)
+
+diff --git a/Makefile b/Makefile
+index 062f3cdfeb0f042773189e92fad208ba433e0335..da912fbdcab2f3ced140ec64c4c11fba743eda9b 100644
+--- a/Makefile
++++ b/Makefile
+@@ -26,7 +26,7 @@ IMGDIR=/opt/img/test
+ DISKS="test.img"
+ override PARAMS+=$(foreach disk,$(DISKS),-drive file=$(IMGDIR)/$(disk),cache=none,if=virtio)
+ 
+-all:	rsync
++all:	rsync pciids.ipxe
+ 
+ .PHONY:	all clean sigs rsync compile syslinux
+ 
+@@ -80,6 +80,32 @@ undi:	all
+ #	gzip -c1 fd11live.img | ssh mirror@ftp \
+ #		dd of=/home/ftp/pub/mirrors/freedos/1.1/fd11live.img.gz
+ 
++#pciids:	/usr/share/hwdata/pci.ids Makefile
++#	awk ' \
++#	  /^[0-9a-f]{4}/ { \
++#	    vendor=substr($$1,1,4); \
++#	    printf "#!ipxe\nset ven/%s\n", $$0 > "pciids/" vendor ".ipxe"; \
++#	  } \
++#	  /^\t[0-9a-f]{4}/ { \
++#	    printf "set dev/%s%s\n", vendor, substr($$0, 2) > "pciids/" vendor ".ipxe" \
++#	  } \
++#	' $<
++
++pciids.ipxe:	/usr/share/hwdata/pci.ids Makefile
++	awk ' \
++	  BEGIN { \
++	    print "#!ipxe\ngoto $${vendor}$${device} || goto $${vendor} || exit" \
++	  } \
++	  /^[0-9a-f]{4}/ { \
++	    vendor=substr($$1,1,4); \
++	    printf ":%s\nset ven %s\nexit\n", vendor, substr($$0,7) \
++	  } \
++	  /^\t[0-9a-f]{4}/ { \
++	    printf ":%s%s\nset dev %s\ngoto %s\n", \
++	           vendor, substr($$0, 2, 4), substr($$0, 8), vendor \
++	  } \
++	' $< > $@
++
+ pxelinux.cfg/pci.ids:	/usr/share/hwdata/pci.ids
+ 	cp -a $< $@
+ 
+
+From fb69b0a2cde079943251bd04b336e5fea8b991e8 Mon Sep 17 00:00:00 2001
+From: ondrejj <ondrejj@c21728ea-8e09-0410-9ecb-e72249775932>
+Date: Mon, 16 Dec 2013 13:29:45 +0000
+Subject: [PATCH] update
+
+git-svn-id: file:///var/svn/pxeboot@3442 c21728ea-8e09-0410-9ecb-e72249775932
+---
+ Makefile | 6 ++++--
+ 1 file changed, 4 insertions(+), 2 deletions(-)
+
+diff --git a/Makefile b/Makefile
+index da912fbdcab2f3ced140ec64c4c11fba743eda9b..ff3c387eef9d3a538df131792ce7148dd446f921 100644
+--- a/Makefile
++++ b/Makefile
+@@ -10,6 +10,7 @@ MEM=1024
+ OUT=sdl
+ MONITOR=stdio
+ NETMODEL=virtio
++WNETMODEL=e1000
+ NET=-net nic,model=$(NETMODEL) -net user,hostfwd=tcp::2222-:22
+ #OPTION_ROM=-option-rom $(IPXEDIR)/bin/virtio-net.rom
+ USB=-usb -usbdevice tablet
+@@ -24,7 +25,8 @@ NON_AUTO_SRCS=\
+ 	#drivers/net/prism2.c
+ IMGDIR=/opt/img/test
+ DISKS="test.img"
+-override PARAMS+=$(foreach disk,$(DISKS),-drive file=$(IMGDIR)/$(disk),cache=none,if=virtio)
++DISKDRV="virtio"
++override PARAMS+=$(foreach disk,$(DISKS),-drive file=$(IMGDIR)/$(disk),cache=none,if=$(DISKDRV))
+ 
+ all:	rsync pciids.ipxe
+ 
+@@ -67,7 +69,7 @@ textboot:
+ 	+make boot OUT=curses MONITOR=vc
+ 
+ wboot:
+-	+make boot NET="$(NET) -net nic,vlan=1,model=e1000 -net user,vlan=1"
++	+make boot NET="$(NET) -net nic,vlan=1,model=$(WNETMODEL) -net user,vlan=1"
+ 
+ undi:	all
+ 	qemu-kvm -m $(MEM) $(NET),tftp=`pwd`,bootfile=$(BOOTFILE) -boot n \
+
+From fc0661a2a293aa8aa567b15d8f41e5521a5bfcbc Mon Sep 17 00:00:00 2001
+From: "Jan ONDREJ (SAL)" <ondrejj(at)salstar.sk>
+Date: Sun, 30 Mar 2014 10:11:21 +0200
+Subject: [PATCH] =?UTF-8?q?autocommit=20Ne=C2=A030.=C2=A0marec=C2=A02014,?=
+ =?UTF-8?q?=C2=A010:11:20=C2=A0CEST?=
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+---
+ Makefile | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/Makefile b/Makefile
+index ff3c387eef9d3a538df131792ce7148dd446f921..878df3a377c9b3ced51c874a8d231ca664a725b6 100644
+--- a/Makefile
++++ b/Makefile
+@@ -1,4 +1,4 @@
+-IPXEDIR=../../c/ipxe/src
++IPXEDIR=../other/ipxe/src
+ TARGETS=\
+ 	bin/ipxe.lkrn\
+ 	bin/ipxe.kpxe\
+
+From c8daf115a586590bdc94a16ce7504285907c7a46 Mon Sep 17 00:00:00 2001
+From: "Jan ONDREJ (SAL)" <ondrejj(at)salstar.sk>
+Date: Sun, 4 May 2014 08:53:47 +0200
+Subject: [PATCH] =?UTF-8?q?autocommit=20Ne=C2=A0=204.=C2=A0m=C3=A1j=C2=A02?=
+ =?UTF-8?q?014,=C2=A008:53:44=C2=A0CEST?=
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+---
+ Makefile | 1 -
+ 1 file changed, 1 deletion(-)
+
+diff --git a/Makefile b/Makefile
+index 878df3a377c9b3ced51c874a8d231ca664a725b6..382d806327b113741b16137cf85147dc9f97a59d 100644
+--- a/Makefile
++++ b/Makefile
+@@ -52,7 +52,6 @@ compile:	syslinux
+ 	for i in $(TARGETS); do \
+ 		cp -a $(IPXEDIR)/$$i ipxe/; \
+ 	done
+-	cp -a $(IPXEDIR)/config/local/*.h ipxe/config/
+ 
+ images/modules.cgz: images/pmagic/scripts/*
+ 	cd images/pmagic; \
+
+From ea9658cc2f71bd743bbd139dc3b53282576c53bd Mon Sep 17 00:00:00 2001
+From: "Jan ONDREJ (SAL)" <ondrejj(at)salstar.sk>
+Date: Tue, 19 Aug 2014 18:19:50 +0200
+Subject: [PATCH] Added centos7. Added custom configuration. Sourceforge
+ caching on ftp.upjs.sk.
+
+---
+ Makefile | 6 +-----
+ 1 file changed, 1 insertion(+), 5 deletions(-)
+
+diff --git a/Makefile b/Makefile
+index 382d806327b113741b16137cf85147dc9f97a59d..b3e78877c1db9f0ffa10588a3283455808d40eee 100644
+--- a/Makefile
++++ b/Makefile
+@@ -20,9 +20,6 @@ BOOTFILE=ipxe/undionly.kpxe
+ UNAME=$(shell uname -r)
+ MEMTEST_VERSION=$(shell	awk '/^set memtest_version / { print $$3 }' $(MAIN_SCRIPT))
+ C32S=hdt menu sysdump
+-NON_AUTO_SRCS=\
+-	#drivers/net/bnx2.c \
+-	#drivers/net/prism2.c
+ IMGDIR=/opt/img/test
+ DISKS="test.img"
+ DISKDRV="virtio"
+@@ -47,8 +44,7 @@ rsync:	images/modules.cgz compile sigs
+ TRUST=$(shell find `pwd`/certs/ -name \*.crt -o -name \*.pem | xargs echo | tr ' ' ',')
+ compile:	syslinux
+ 	-make -j1 -C $(IPXEDIR) EMBEDDED_IMAGE=`pwd`/link.ipxe \
+-		TRUST=$(TRUST) $(TARGETS) NO_WERROR=1 \
+-		NON_AUTO_SRCS=$(NON_AUTO_SRCS) $(IPXE_OPTS)
++		TRUST=$(TRUST) $(TARGETS) NO_WERROR=1 $(IPXE_OPTS)
+ 	for i in $(TARGETS); do \
+ 		cp -a $(IPXEDIR)/$$i ipxe/; \
+ 	done
+
+From de05a559ce1ecf737628d65cbc3ae41af100bf67 Mon Sep 17 00:00:00 2001
+From: "Jan ONDREJ (SAL)" <ondrejj(at)salstar.sk>
+Date: Sat, 27 Sep 2014 14:41:26 +0200
+Subject: [PATCH] Serial console fixes.
+
+---
+ Makefile | 17 ++++++++++-------
+ 1 file changed, 10 insertions(+), 7 deletions(-)
+
+diff --git a/Makefile b/Makefile
+index b3e78877c1db9f0ffa10588a3283455808d40eee..138903d969c0a3995dc2601f609f245d79f6d4e0 100644
+--- a/Makefile
++++ b/Makefile
+@@ -16,7 +16,7 @@ NET=-net nic,model=$(NETMODEL) -net user,hostfwd=tcp::2222-:22
+ USB=-usb -usbdevice tablet
+ PARAMS:=
+ MAIN_SCRIPT=menu.ipxe
+-BOOTFILE=ipxe/undionly.kpxe
++BOOTFILE=ipxe/com1/undionly.kpxe
+ UNAME=$(shell uname -r)
+ MEMTEST_VERSION=$(shell	awk '/^set memtest_version / { print $$3 }' $(MAIN_SCRIPT))
+ C32S=hdt menu sysdump
+@@ -39,14 +39,17 @@ rsync:	images/modules.cgz compile sigs
+ 	rsync -avPH --inplace --delete ./ ftp:public_html/boot/ \
+ 	  --exclude='**/.svn' --exclude='**/rsync'
+ 	# to tftp server for dhcp boot
+-	rsync -avPH --inplace ipxe/*pxe ftp:/var/lib/tftpboot/ipxe/
++	rsync -avPH --inplace ipxe/*pxe ipxe/com* ftp:/var/lib/tftpboot/ipxe/
+ 
+ TRUST=$(shell find `pwd`/certs/ -name \*.crt -o -name \*.pem | xargs echo | tr ' ' ',')
+ compile:	syslinux
+-	-make -j1 -C $(IPXEDIR) EMBEDDED_IMAGE=`pwd`/link.ipxe \
+-		TRUST=$(TRUST) $(TARGETS) NO_WERROR=1 $(IPXE_OPTS)
+-	for i in $(TARGETS); do \
+-		cp -a $(IPXEDIR)/$$i ipxe/; \
++	for config in "" com1 com2; do \
++		make -j1 -C $(IPXEDIR) EMBEDDED_IMAGE=`pwd`/link.ipxe \
++			TRUST=$(TRUST) $(TARGETS) NO_WERROR=1 $(IPXE_OPTS) \
++			CONFIG=$$config; \
++		for i in $(TARGETS); do \
++			cp -a $(IPXEDIR)/$$i ipxe/$$config/; \
++		done; \
+ 	done
+ 
+ images/modules.cgz: images/pmagic/scripts/*
+@@ -56,7 +59,7 @@ images/modules.cgz: images/pmagic/scripts/*
+ 		> ../../$@
+ 
+ boot:	all
+-	qemu-kvm -m $(MEM) -kernel ipxe/ipxe.lkrn -monitor $(MONITOR) \
++	qemu-kvm -m $(MEM) -kernel ipxe/com1/ipxe.lkrn -monitor $(MONITOR) \
+ 		$(USB) $(PARAMS) $(OPTION_ROM) $(NET) -display $(OUT) $(ARGS)
+ 	@echo ""
+ 
+
+From ce7a48108da376fa3bc57a9921dc147957370525 Mon Sep 17 00:00:00 2001
+From: "Jan ONDREJ (SAL)" <ondrejj(at)salstar.sk>
+Date: Fri, 31 Oct 2014 19:41:45 +0100
+Subject: [PATCH] Added gparted testing. Added coreos. Other fixes.
+
+---
+ Makefile | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/Makefile b/Makefile
+index 138903d969c0a3995dc2601f609f245d79f6d4e0..990044c726ec05ef66e2c8d680e2ca17a7e6fb5a 100644
+--- a/Makefile
++++ b/Makefile
+@@ -35,7 +35,7 @@ clean:
+ sigs:
+ 	+make -C sigs
+ 
+-rsync:	images/modules.cgz compile sigs
++rsync:	images/modules.cgz sigs
+ 	rsync -avPH --inplace --delete ./ ftp:public_html/boot/ \
+ 	  --exclude='**/.svn' --exclude='**/rsync'
+ 	# to tftp server for dhcp boot
+
+From dadc3d7e86df82ffe910e3139173d2e6cfd99539 Mon Sep 17 00:00:00 2001
+From: "Jan ONDREJ (SAL)" <ondrejj(at)salstar.sk>
+Date: Fri, 27 Feb 2015 12:53:07 +0100
+Subject: [PATCH] Kernel parameters menu reorganization. New clonezilla
+ version. Kickstart biosboot fixes.
+
+---
+ Makefile | 7 ++++---
+ 1 file changed, 4 insertions(+), 3 deletions(-)
+
+diff --git a/Makefile b/Makefile
+index 990044c726ec05ef66e2c8d680e2ca17a7e6fb5a..c9bb0b359e6571a915b0b315f50f4b0c60dac84c 100644
+--- a/Makefile
++++ b/Makefile
+@@ -6,12 +6,13 @@ TARGETS=\
+ 	bin/ipxe.usb\
+ 	bin/undionly.kpxe\
+ 	#bin/virtio-net.rom
++IPXECONFIGS="" com1 com2
+ MEM=1024
+-OUT=sdl
++OUT=gtk
+ MONITOR=stdio
+ NETMODEL=virtio
+ WNETMODEL=e1000
+-NET=-net nic,model=$(NETMODEL) -net user,hostfwd=tcp::2222-:22
++NET=-net nic,model=$(NETMODEL) -net user,hostfwd=tcp::2220-:22
+ #OPTION_ROM=-option-rom $(IPXEDIR)/bin/virtio-net.rom
+ USB=-usb -usbdevice tablet
+ PARAMS:=
+@@ -43,7 +44,7 @@ rsync:	images/modules.cgz sigs
+ 
+ TRUST=$(shell find `pwd`/certs/ -name \*.crt -o -name \*.pem | xargs echo | tr ' ' ',')
+ compile:	syslinux
+-	for config in "" com1 com2; do \
++	for config in $(IPXECONFIGS); do \
+ 		make -j1 -C $(IPXEDIR) EMBEDDED_IMAGE=`pwd`/link.ipxe \
+ 			TRUST=$(TRUST) $(TARGETS) NO_WERROR=1 $(IPXE_OPTS) \
+ 			CONFIG=$$config; \
+
+From 96f65d67e5e049219ca37a53ae68116bdd7fb854 Mon Sep 17 00:00:00 2001
+From: "Jan ONDREJ (SAL)" <ondrejj(at)salstar.sk>
+Date: Wed, 11 Mar 2015 13:50:12 +0100
+Subject: [PATCH] iPXE console selection
+
+---
+ Makefile | 3 +--
+ 1 file changed, 1 insertion(+), 2 deletions(-)
+
+diff --git a/Makefile b/Makefile
+index c9bb0b359e6571a915b0b315f50f4b0c60dac84c..2aab910b4b90cf97d0f92cf972e7102a6f2807b8 100644
+--- a/Makefile
++++ b/Makefile
+@@ -4,8 +4,7 @@ TARGETS=\
+ 	bin/ipxe.kpxe\
+ 	bin/ipxe.iso\
+ 	bin/ipxe.usb\
+-	bin/undionly.kpxe\
+-	#bin/virtio-net.rom
++	bin/undionly.kpxe
+ IPXECONFIGS="" com1 com2
+ MEM=1024
+ OUT=gtk
+
+From c891475ee30399d51107240fa00a667635fcf6b0 Mon Sep 17 00:00:00 2001
+From: "Jan ONDREJ (SAL)" <ondrejj(at)salstar.sk>
+Date: Mon, 22 Jun 2015 20:16:43 +0200
+Subject: [PATCH] Ubuntu booting from updates (12.04 is broken without
+ updates). Added Mageia 5.
+
+---
+ Makefile | 4 ++--
+ 1 file changed, 2 insertions(+), 2 deletions(-)
+
+diff --git a/Makefile b/Makefile
+index 2aab910b4b90cf97d0f92cf972e7102a6f2807b8..a5b558cdd4c401c6fe866dd182674e7da43c4b78 100644
+--- a/Makefile
++++ b/Makefile
+@@ -37,7 +37,7 @@ sigs:
+ 
+ rsync:	images/modules.cgz sigs
+ 	rsync -avPH --inplace --delete ./ ftp:public_html/boot/ \
+-	  --exclude='**/.svn' --exclude='**/rsync'
++	  --exclude='**/.git' --exclude='**/rsync'
+ 	# to tftp server for dhcp boot
+ 	rsync -avPH --inplace ipxe/*pxe ipxe/com* ftp:/var/lib/tftpboot/ipxe/
+ 
+@@ -54,7 +54,7 @@ compile:	syslinux
+ 
+ images/modules.cgz: images/pmagic/scripts/*
+ 	cd images/pmagic; \
+-	find scripts modules | grep -v '/\.svn' \
++	find scripts modules | grep -v '/\.git' \
+ 		| cpio --quiet -H newc -o | gzip -9 \
+ 		> ../../$@
+ 
+
+From d6c7fb3f95f7fb7c2e58b803c68d5ff545191e1d Mon Sep 17 00:00:00 2001
+From: "Jan ONDREJ (SAL)" <ondrejj(at)salstar.sk>
+Date: Fri, 2 Oct 2015 09:40:07 +0200
+Subject: [PATCH] Fallback to non-updates dir for debian based systems.
+ Bootconfig parameter for Makefile.
+
+---
+ Makefile | 4 +++-
+ 1 file changed, 3 insertions(+), 1 deletion(-)
+
+diff --git a/Makefile b/Makefile
+index a5b558cdd4c401c6fe866dd182674e7da43c4b78..772d9f1ce35c99332c4afd1cf70bd16dce2c31d4 100644
+--- a/Makefile
++++ b/Makefile
+@@ -16,6 +16,7 @@ NET=-net nic,model=$(NETMODEL) -net user,hostfwd=tcp::2220-:22
+ USB=-usb -usbdevice tablet
+ PARAMS:=
+ MAIN_SCRIPT=menu.ipxe
++BOOTCONFIG=com1
+ BOOTFILE=ipxe/com1/undionly.kpxe
+ UNAME=$(shell uname -r)
+ MEMTEST_VERSION=$(shell	awk '/^set memtest_version / { print $$3 }' $(MAIN_SCRIPT))
+@@ -59,7 +60,8 @@ images/modules.cgz: images/pmagic/scripts/*
+ 		> ../../$@
+ 
+ boot:	all
+-	qemu-kvm -m $(MEM) -kernel ipxe/com1/ipxe.lkrn -monitor $(MONITOR) \
++	qemu-kvm -m $(MEM) -kernel ipxe/$(BOOTCONFIG)/ipxe.lkrn \
++		-monitor $(MONITOR) \
+ 		$(USB) $(PARAMS) $(OPTION_ROM) $(NET) -display $(OUT) $(ARGS)
+ 	@echo ""
+ 
+
+From 09e7803c2a62066e2ddfa7237c4ae36c6e91ec9f Mon Sep 17 00:00:00 2001
+From: "Jan ONDREJ (SAL)" <ondrejj(at)salstar.sk>
+Date: Sat, 14 Nov 2015 20:00:53 +0100
+Subject: [PATCH] Various OSes updated to latest versions. Makefile updates.
+
+---
+ Makefile | 8 +++++---
+ 1 file changed, 5 insertions(+), 3 deletions(-)
+
+diff --git a/Makefile b/Makefile
+index 772d9f1ce35c99332c4afd1cf70bd16dce2c31d4..717b3ece07ea9552837bf63382ee61a73bd5d7b3 100644
+--- a/Makefile
++++ b/Makefile
+@@ -12,7 +12,6 @@ MONITOR=stdio
+ NETMODEL=virtio
+ WNETMODEL=e1000
+ NET=-net nic,model=$(NETMODEL) -net user,hostfwd=tcp::2220-:22
+-#OPTION_ROM=-option-rom $(IPXEDIR)/bin/virtio-net.rom
+ USB=-usb -usbdevice tablet
+ PARAMS:=
+ MAIN_SCRIPT=menu.ipxe
+@@ -25,6 +24,7 @@ IMGDIR=/opt/img/test
+ DISKS="test.img"
+ DISKDRV="virtio"
+ override PARAMS+=$(foreach disk,$(DISKS),-drive file=$(IMGDIR)/$(disk),cache=none,if=$(DISKDRV))
++#override PARAMS+=-option-rom $(IPXEDIR)/bin/virtio-net.rom
+ 
+ all:	rsync pciids.ipxe
+ 
+@@ -61,8 +61,10 @@ images/modules.cgz: images/pmagic/scripts/*
+ 
+ boot:	all
+ 	qemu-kvm -m $(MEM) -kernel ipxe/$(BOOTCONFIG)/ipxe.lkrn \
+-		-monitor $(MONITOR) \
+-		$(USB) $(PARAMS) $(OPTION_ROM) $(NET) -display $(OUT) $(ARGS)
++		-monitor $(MONITOR) $(USB) -display $(OUT) \
++		$(NET) \
++		$(PARAMS) \
++		$(ARGS)
+ 	@echo ""
+ 
+ textboot:
+
+From 1735633a2213513b85d61b6486324f0ca36416b4 Mon Sep 17 00:00:00 2001
+From: "Jan ONDREJ (SAL)" <ondrejj(at)salstar.sk>
+Date: Sun, 13 Dec 2015 08:13:20 +0100
+Subject: [PATCH] Added ability to enable CentOS continuous release packages.
+ Allow selection of detailed CentOS versions. Prepare for let's encrypt SSL
+ certificate.
+
+---
+ Makefile | 3 ++-
+ 1 file changed, 2 insertions(+), 1 deletion(-)
+
+diff --git a/Makefile b/Makefile
+index 717b3ece07ea9552837bf63382ee61a73bd5d7b3..41d23f31c186f4762bf8d67753b205f584bc5556 100644
+--- a/Makefile
++++ b/Makefile
+@@ -38,7 +38,8 @@ sigs:
+ 
+ rsync:	images/modules.cgz sigs
+ 	rsync -avPH --inplace --delete ./ ftp:public_html/boot/ \
+-	  --exclude='**/.git' --exclude='**/rsync'
++	  --exclude='**/.git' --exclude='**/rsync' \
++	  --exclude='.well-known'
+ 	# to tftp server for dhcp boot
+ 	rsync -avPH --inplace ipxe/*pxe ipxe/com* ftp:/var/lib/tftpboot/ipxe/
+ 
+
+From e6b4ed1441fcf88371d919b14116e30c0f423480 Mon Sep 17 00:00:00 2001
+From: "Jan ONDREJ (SAL)" <ondrejj(at)salstar.sk>
+Date: Wed, 17 Feb 2016 06:21:15 +0100
+Subject: [PATCH] iPXE sources moved to src dir for easy compilation.
+
+---
+ Makefile | 4 ++--
+ 1 file changed, 2 insertions(+), 2 deletions(-)
+
+diff --git a/Makefile b/Makefile
+index 41d23f31c186f4762bf8d67753b205f584bc5556..4d23e8847c6d6e6df695cc8cc42144edd8c49929 100644
+--- a/Makefile
++++ b/Makefile
+@@ -1,4 +1,4 @@
+-IPXEDIR=../other/ipxe/src
++IPXEDIR=src
+ TARGETS=\
+ 	bin/ipxe.lkrn\
+ 	bin/ipxe.kpxe\
+@@ -38,7 +38,7 @@ sigs:
+ 
+ rsync:	images/modules.cgz sigs
+ 	rsync -avPH --inplace --delete ./ ftp:public_html/boot/ \
+-	  --exclude='**/.git' --exclude='**/rsync' \
++	  --exclude='**/.git' --exclude='**/rsync' --exclude='src/' \
+ 	  --exclude='.well-known'
+ 	# to tftp server for dhcp boot
+ 	rsync -avPH --inplace ipxe/*pxe ipxe/com* ftp:/var/lib/tftpboot/ipxe/
+
+From 24f6149934ce54fb9e55043e4fb2392d10c9a7db Mon Sep 17 00:00:00 2001
+From: "Jan ONDREJ (SAL)" <ondrejj(at)salstar.sk>
+Date: Thu, 24 Mar 2016 09:38:23 +0100
+Subject: [PATCH] New recompile option. Various OS upgrades.
+
+---
+ Makefile | 5 +++++
+ 1 file changed, 5 insertions(+)
+
+diff --git a/Makefile b/Makefile
+index 4d23e8847c6d6e6df695cc8cc42144edd8c49929..fefa16ff0610aa87190159cc5df1c52bbdd5018f 100644
+--- a/Makefile
++++ b/Makefile
+@@ -54,6 +54,11 @@ compile:	syslinux
+ 		done; \
+ 	done
+ 
++recompile:
++	(cd src; git-update-show; cd ..)
++	@make compile
++	@make
++
+ images/modules.cgz: images/pmagic/scripts/*
+ 	cd images/pmagic; \
+ 	find scripts modules | grep -v '/\.git' \
+
+From 43dcccddcc79c73cad1707756f6fa06189a6bcee Mon Sep 17 00:00:00 2001
+From: "Jan ONDREJ (SAL)" <ondrejj(at)salstar.sk>
+Date: Wed, 22 Jun 2016 08:45:00 +0200
+Subject: [PATCH] Fedora 24 added. Fedora 24 requires more than 1 GB of RAM.
+ GParted 0.26 added. Use ntp client.
+
+---
+ Makefile | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/Makefile b/Makefile
+index fefa16ff0610aa87190159cc5df1c52bbdd5018f..8913735d14c3e2f32761023ae5827a8df87219e6 100644
+--- a/Makefile
++++ b/Makefile
+@@ -6,7 +6,7 @@ TARGETS=\
+ 	bin/ipxe.usb\
+ 	bin/undionly.kpxe
+ IPXECONFIGS="" com1 com2
+-MEM=1024
++MEM=2048
+ OUT=gtk
+ MONITOR=stdio
+ NETMODEL=virtio
+
+From 71f56c4c1215979ebf79cd53e8b975759320817e Mon Sep 17 00:00:00 2001
+From: "Jan ONDREJ (SAL)" <ondrejj(at)salstar.sk>
+Date: Tue, 5 Jul 2016 08:27:09 +0200
+Subject: [PATCH] iPXE parallel build.
+
+---
+ Makefile | 4 ++--
+ 1 file changed, 2 insertions(+), 2 deletions(-)
+
+diff --git a/Makefile b/Makefile
+index 8913735d14c3e2f32761023ae5827a8df87219e6..92503955e505da42a9993144613b272b1ecd977e 100644
+--- a/Makefile
++++ b/Makefile
+@@ -46,9 +46,9 @@ rsync:	images/modules.cgz sigs
+ TRUST=$(shell find `pwd`/certs/ -name \*.crt -o -name \*.pem | xargs echo | tr ' ' ',')
+ compile:	syslinux
+ 	for config in $(IPXECONFIGS); do \
+-		make -j1 -C $(IPXEDIR) EMBEDDED_IMAGE=`pwd`/link.ipxe \
++		make -j4 -C $(IPXEDIR) EMBEDDED_IMAGE=`pwd`/link.ipxe \
+ 			TRUST=$(TRUST) $(TARGETS) NO_WERROR=1 $(IPXE_OPTS) \
+-			CONFIG=$$config; \
++			CONFIG=$$config $(ARGS); \
+ 		for i in $(TARGETS); do \
+ 			cp -a $(IPXEDIR)/$$i ipxe/$$config/; \
+ 		done; \
+
+From 98038e4362e8e19cb8af5dcde5634d7f793a5a2a Mon Sep 17 00:00:00 2001
+From: "Jan ONDREJ (SAL)" <ondrejj(at)salstar.sk>
+Date: Tue, 11 Oct 2016 19:00:25 +0200
+Subject: [PATCH] EFI support testing.
+
+---
+ Makefile | 3 ++-
+ 1 file changed, 2 insertions(+), 1 deletion(-)
+
+diff --git a/Makefile b/Makefile
+index 92503955e505da42a9993144613b272b1ecd977e..5befa619f7c9b1d39ad8b31521479c3cb2042954 100644
+--- a/Makefile
++++ b/Makefile
+@@ -4,7 +4,8 @@ TARGETS=\
+ 	bin/ipxe.kpxe\
+ 	bin/ipxe.iso\
+ 	bin/ipxe.usb\
+-	bin/undionly.kpxe
++	bin/undionly.kpxe\
++	bin-x86_64-efi/ipxe.efi
+ IPXECONFIGS="" com1 com2
+ MEM=2048
+ OUT=gtk
+
+From bb78e6e7a164d08cfa26fd51b36eaedf6fea9667 Mon Sep 17 00:00:00 2001
+From: "Jan ONDREJ (SAL)" <ondrejj(at)salstar.sk>
+Date: Thu, 22 Dec 2016 17:32:32 +0100
+Subject: [PATCH] Disabled ipv6 for broken qemu-2.7.
+
+---
+ Makefile | 9 ++++++---
+ 1 file changed, 6 insertions(+), 3 deletions(-)
+
+diff --git a/Makefile b/Makefile
+index 5befa619f7c9b1d39ad8b31521479c3cb2042954..207b3fecc232474aaadf6a379d5cfd930beb73b0 100644
+--- a/Makefile
++++ b/Makefile
+@@ -5,6 +5,7 @@ TARGETS=\
+ 	bin/ipxe.iso\
+ 	bin/ipxe.usb\
+ 	bin/undionly.kpxe\
++	bin/virtio-net.rom\
+ 	bin-x86_64-efi/ipxe.efi
+ IPXECONFIGS="" com1 com2
+ MEM=2048
+@@ -12,7 +13,7 @@ OUT=gtk
+ MONITOR=stdio
+ NETMODEL=virtio
+ WNETMODEL=e1000
+-NET=-net nic,model=$(NETMODEL) -net user,hostfwd=tcp::2220-:22
++NET=-net nic,model=$(NETMODEL) -net user,hostfwd=tcp::2220-:22,ipv4
+ USB=-usb -usbdevice tablet
+ PARAMS:=
+ MAIN_SCRIPT=menu.ipxe
+@@ -55,8 +56,10 @@ compile:	syslinux
+ 		done; \
+ 	done
+ 
+-recompile:
+-	(cd src; git-update-show; cd ..)
++updatesrc:
++	cd src; git-update-show
++
++recompile:	updatesrc
+ 	@make compile
+ 	@make
+ 
+
+From 16a1f04995cb2abceb67ee733863aaa0ef79aef8 Mon Sep 17 00:00:00 2001
+From: "Jan ONDREJ (SAL)" <ondrejj(at)salstar.sk>
+Date: Tue, 18 Apr 2017 10:02:25 +0200
+Subject: [PATCH] Reenable IPv6 support for qemu (fixed upstream). OS updates.
+
+---
+ Makefile | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/Makefile b/Makefile
+index 207b3fecc232474aaadf6a379d5cfd930beb73b0..7ccb5172a7e5f659cad5a2aacbd23db43a995456 100644
+--- a/Makefile
++++ b/Makefile
+@@ -13,7 +13,7 @@ OUT=gtk
+ MONITOR=stdio
+ NETMODEL=virtio
+ WNETMODEL=e1000
+-NET=-net nic,model=$(NETMODEL) -net user,hostfwd=tcp::2220-:22,ipv4
++NET=-net nic,model=$(NETMODEL) -net user,hostfwd=tcp::2220-:22
+ USB=-usb -usbdevice tablet
+ PARAMS:=
+ MAIN_SCRIPT=menu.ipxe
+
+From 42783db7d5384fc9b388780e05ad818c7a261a80 Mon Sep 17 00:00:00 2001
+From: "Jan ONDREJ (SAL)" <ondrejj(at)salstar.sk>
+Date: Fri, 25 Aug 2017 07:19:41 +0200
+Subject: [PATCH] Added netbootxyz. GParted - version update. Fedora - version
+ update. Fedora kickstart - fix python interpreter.
+
+---
+ Makefile | 3 ++-
+ 1 file changed, 2 insertions(+), 1 deletion(-)
+
+diff --git a/Makefile b/Makefile
+index 7ccb5172a7e5f659cad5a2aacbd23db43a995456..153ec701bd10d459ceda4049f189639b2c3934b7 100644
+--- a/Makefile
++++ b/Makefile
+@@ -13,7 +13,8 @@ OUT=gtk
+ MONITOR=stdio
+ NETMODEL=virtio
+ WNETMODEL=e1000
+-NET=-net nic,model=$(NETMODEL) -net user,hostfwd=tcp::2220-:22
++#NETOPTS=,ipv4
++NET=-net nic,model=$(NETMODEL) -net user,hostfwd=tcp::2220-:22$(NETOPTS)
+ USB=-usb -usbdevice tablet
+ PARAMS:=
+ MAIN_SCRIPT=menu.ipxe
+
+From 36d4a1831c4d5be055f58246747718f9c0e7c1c9 Mon Sep 17 00:00:00 2001
+From: "Jan ONDREJ (SAL)" <ondrejj(at)salstar.sk>
+Date: Mon, 11 Dec 2017 11:35:00 +0100
+Subject: [PATCH] Memtest updates. Live kickstart fixes for new strings.
+
+---
+ Makefile | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/Makefile b/Makefile
+index 153ec701bd10d459ceda4049f189639b2c3934b7..f4710ad57231e221aef29b3638b3e20b273668b4 100644
+--- a/Makefile
++++ b/Makefile
+@@ -21,7 +21,7 @@ MAIN_SCRIPT=menu.ipxe
+ BOOTCONFIG=com1
+ BOOTFILE=ipxe/com1/undionly.kpxe
+ UNAME=$(shell uname -r)
+-MEMTEST_VERSION=$(shell	awk '/^set memtest_version / { print $$3 }' $(MAIN_SCRIPT))
++MEMTEST_VERSION=$(shell	awk '/^set memtest_version / { print $$3 }' tools.ipxe)
+ C32S=hdt menu sysdump
+ IMGDIR=/opt/img/test
+ DISKS="test.img"
+
+From 1ccf8db66e75048204d219de6e4269c49916303e Mon Sep 17 00:00:00 2001
+From: "Jan ONDREJ (SAL)" <ondrejj(at)salstar.sk>
+Date: Thu, 31 May 2018 09:27:00 +0200
+Subject: [PATCH] Various updates for Makefile.
+
+---
+ Makefile | 15 +++++++++++----
+ 1 file changed, 11 insertions(+), 4 deletions(-)
+
+diff --git a/Makefile b/Makefile
+index f4710ad57231e221aef29b3638b3e20b273668b4..08350080310b07043f74788b1d040d043c5bf4ee 100644
+--- a/Makefile
++++ b/Makefile
+@@ -15,7 +15,7 @@ NETMODEL=virtio
+ WNETMODEL=e1000
+ #NETOPTS=,ipv4
+ NET=-net nic,model=$(NETMODEL) -net user,hostfwd=tcp::2220-:22$(NETOPTS)
+-USB=-usb -usbdevice tablet
++USB=-usb -device usb-tablet
+ PARAMS:=
+ MAIN_SCRIPT=menu.ipxe
+ BOOTCONFIG=com1
+@@ -24,9 +24,10 @@ UNAME=$(shell uname -r)
+ MEMTEST_VERSION=$(shell	awk '/^set memtest_version / { print $$3 }' tools.ipxe)
+ C32S=hdt menu sysdump
+ IMGDIR=/opt/img/test
+-DISKS="test.img"
++DISKS=test.img
+ DISKDRV="virtio"
+-override PARAMS+=$(foreach disk,$(DISKS),-drive file=$(IMGDIR)/$(disk),cache=none,if=$(DISKDRV))
++CACHE="none"
++override PARAMS+=$(foreach disk,$(DISKS),-drive file=$(IMGDIR)/$(disk),cache=$(CACHE),if=$(DISKDRV))
+ #override PARAMS+=-option-rom $(IPXEDIR)/bin/virtio-net.rom
+ 
+ all:	rsync pciids.ipxe
+@@ -70,7 +71,10 @@ images/modules.cgz: images/pmagic/scripts/*
+ 		| cpio --quiet -H newc -o | gzip -9 \
+ 		> ../../$@
+ 
+-boot:	all
++$(IMGDIR)/$(DISKS):
++	qemu-img create $@ 8G
++
++boot:	all $(IMGDIR)/$(DISKS)
+ 	qemu-kvm -m $(MEM) -kernel ipxe/$(BOOTCONFIG)/ipxe.lkrn \
+ 		-monitor $(MONITOR) $(USB) -display $(OUT) \
+ 		$(NET) \
+@@ -84,6 +88,9 @@ textboot:
+ wboot:
+ 	+make boot NET="$(NET) -net nic,vlan=1,model=$(WNETMODEL) -net user,vlan=1"
+ 
++rboot:
++	+make boot IMGDIR=/tmp CACHE=unsafe
++
+ undi:	all
+ 	qemu-kvm -m $(MEM) $(NET),tftp=`pwd`,bootfile=$(BOOTFILE) -boot n \
+ 		-display $(OUT) $(USB) $(PARAMS) $(ARGS)
+
+From 998eebe878f4b6576fd9d4ae8001ea4339cfced2 Mon Sep 17 00:00:00 2001
+From: "Jan ONDREJ (SAL)" <ondrejj(at)salstar.sk>
+Date: Mon, 18 Jun 2018 09:24:04 +0200
+Subject: [PATCH] Fedora, debian updates.
+
+---
+ Makefile | 3 ++-
+ 1 file changed, 2 insertions(+), 1 deletion(-)
+
+diff --git a/Makefile b/Makefile
+index 08350080310b07043f74788b1d040d043c5bf4ee..2dc4dd0943eada101108bc9cbf8ed9949f03d343 100644
+--- a/Makefile
++++ b/Makefile
+@@ -27,6 +27,7 @@ IMGDIR=/opt/img/test
+ DISKS=test.img
+ DISKDRV="virtio"
+ CACHE="none"
++DISKS_FULL_PATH+=$(foreach disk,$(DISKS), $(IMGDIR)/$(disk))
+ override PARAMS+=$(foreach disk,$(DISKS),-drive file=$(IMGDIR)/$(disk),cache=$(CACHE),if=$(DISKDRV))
+ #override PARAMS+=-option-rom $(IPXEDIR)/bin/virtio-net.rom
+ 
+@@ -74,7 +75,7 @@ images/modules.cgz: images/pmagic/scripts/*
+ $(IMGDIR)/$(DISKS):
+ 	qemu-img create $@ 8G
+ 
+-boot:	all $(IMGDIR)/$(DISKS)
++boot:	all $(DISKS_FULL_PATH)
+ 	qemu-kvm -m $(MEM) -kernel ipxe/$(BOOTCONFIG)/ipxe.lkrn \
+ 		-monitor $(MONITOR) $(USB) -display $(OUT) \
+ 		$(NET) \
+
+From 0acb580d0386a7507934dfcf16f229c253f9005d Mon Sep 17 00:00:00 2001
+From: "Jan ONDREJ (SAL)" <ondrejj(at)salstar.sk>
+Date: Thu, 29 Nov 2018 15:24:00 +0100
+Subject: [PATCH] Added automatic installation for Debian and Ubuntu systems.
+
+---
+ Makefile | 3 +++
+ 1 file changed, 3 insertions(+)
+
+diff --git a/Makefile b/Makefile
+index 2dc4dd0943eada101108bc9cbf8ed9949f03d343..4b145feeb5238d4c2616f5fd1c96ab7fede1c7dc 100644
+--- a/Makefile
++++ b/Makefile
+@@ -92,6 +92,9 @@ wboot:
+ rboot:
+ 	+make boot IMGDIR=/tmp CACHE=unsafe
+ 
++raidboot:
++	+make boot DISKS="test1.img test2.img"
++
+ undi:	all
+ 	qemu-kvm -m $(MEM) $(NET),tftp=`pwd`,bootfile=$(BOOTFILE) -boot n \
+ 		-display $(OUT) $(USB) $(PARAMS) $(ARGS)
+
+From 1a0f9927facbc360c05d59d93d1758eb64fa98c4 Mon Sep 17 00:00:00 2001
+From: "Jan ONDREJ (SAL)" <ondrejj(at)salstar.sk>
+Date: Wed, 6 Feb 2019 08:40:02 +0100
+Subject: [PATCH] Added SystemRescueCD. Change yum/dnf gpg keys URLs to https.
+
+---
+ Makefile | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/Makefile b/Makefile
+index 4b145feeb5238d4c2616f5fd1c96ab7fede1c7dc..09f44954d52aafbca1fc7719f49b49825388d3f0 100644
+--- a/Makefile
++++ b/Makefile
+@@ -42,7 +42,7 @@ sigs:
+ 	+make -C sigs
+ 
+ rsync:	images/modules.cgz sigs
+-	rsync -avPH --inplace --delete ./ ftp:public_html/boot/ \
++	rsync -avPH --inplace --delete ./ www.salstar.sk:public_html/boot/ \
+ 	  --exclude='**/.git' --exclude='**/rsync' --exclude='src/' \
+ 	  --exclude='.well-known'
+ 	# to tftp server for dhcp boot
+
+From fdb8f73d6199106b4db38d491e07abc8fbb1cb0d Mon Sep 17 00:00:00 2001
+From: "Jan ONDREJ (SAL)" <ondrejj(at)salstar.sk>
+Date: Thu, 21 Feb 2019 07:47:53 +0100
+Subject: [PATCH] Default Makefile disk images switched to LVM. Live Fedora
+ default packages updated according to current version. http to https changes
+ for www.salstar.sk
+
+---
+ Makefile | 18 ++++++++----------
+ 1 file changed, 8 insertions(+), 10 deletions(-)
+
+diff --git a/Makefile b/Makefile
+index 09f44954d52aafbca1fc7719f49b49825388d3f0..f8ceba6a8f48cf1a165183a74d63ef0e5ba35b06 100644
+--- a/Makefile
++++ b/Makefile
+@@ -24,11 +24,12 @@ UNAME=$(shell uname -r)
+ MEMTEST_VERSION=$(shell	awk '/^set memtest_version / { print $$3 }' tools.ipxe)
+ C32S=hdt menu sysdump
+ IMGDIR=/opt/img/test
+-DISKS=test.img
++#DISKS=$(IMGDIR)/test.img
++DISKS=/dev/vg_work/qemu_test1
+ DISKDRV="virtio"
+ CACHE="none"
+-DISKS_FULL_PATH+=$(foreach disk,$(DISKS), $(IMGDIR)/$(disk))
+-override PARAMS+=$(foreach disk,$(DISKS),-drive file=$(IMGDIR)/$(disk),cache=$(CACHE),if=$(DISKDRV))
++#DISKS_FULL_PATH+=$(foreach disk,$(DISKS), $(IMGDIR)/$(disk))
++override PARAMS+=$(foreach disk,$(DISKS),-drive file=$(disk),cache=$(CACHE),if=$(DISKDRV))
+ #override PARAMS+=-option-rom $(IPXEDIR)/bin/virtio-net.rom
+ 
+ all:	rsync pciids.ipxe
+@@ -72,10 +73,10 @@ images/modules.cgz: images/pmagic/scripts/*
+ 		| cpio --quiet -H newc -o | gzip -9 \
+ 		> ../../$@
+ 
+-$(IMGDIR)/$(DISKS):
+-	qemu-img create $@ 8G
++#$(IMGDIR)/$(DISKS):
++#	qemu-img create $@ 8G
+ 
+-boot:	all $(DISKS_FULL_PATH)
++boot:	all
+ 	qemu-kvm -m $(MEM) -kernel ipxe/$(BOOTCONFIG)/ipxe.lkrn \
+ 		-monitor $(MONITOR) $(USB) -display $(OUT) \
+ 		$(NET) \
+@@ -89,11 +90,8 @@ textboot:
+ wboot:
+ 	+make boot NET="$(NET) -net nic,vlan=1,model=$(WNETMODEL) -net user,vlan=1"
+ 
+-rboot:
+-	+make boot IMGDIR=/tmp CACHE=unsafe
+-
+ raidboot:
+-	+make boot DISKS="test1.img test2.img"
++	+make boot DISKS="$(IMGDIR)/test1.img $(IMGDIR)/test2.img"
+ 
+ undi:	all
+ 	qemu-kvm -m $(MEM) $(NET),tftp=`pwd`,bootfile=$(BOOTFILE) -boot n \
+
+From fa605c95e48cce478da30e74565fb93cbeefbc33 Mon Sep 17 00:00:00 2001
+From: "Jan ONDREJ (SAL)" <ondrejj(at)salstar.sk>
+Date: Tue, 11 Jun 2019 06:28:31 +0200
+Subject: [PATCH] NetBSD and GParted version updates. Fedora 30 Live package
+ updates.
+
+---
+ Makefile | 10 +++++++++-
+ 1 file changed, 9 insertions(+), 1 deletion(-)
+
+diff --git a/Makefile b/Makefile
+index f8ceba6a8f48cf1a165183a74d63ef0e5ba35b06..cebffe66b73da431ad54317d73a76e2b44424573 100644
+--- a/Makefile
++++ b/Makefile
+@@ -84,11 +84,19 @@ boot:	all
+ 		$(ARGS)
+ 	@echo ""
+ 
++onlyboot:
++	qemu-kvm -m $(MEM) -kernel ipxe/$(BOOTCONFIG)/ipxe.lkrn \
++		-monitor $(MONITOR) $(USB) -display $(OUT) \
++		$(NET) \
++		$(PARAMS) \
++		$(ARGS)
++	@echo ""
++
+ textboot:
+ 	+make boot OUT=curses MONITOR=vc
+ 
+ wboot:
+-	+make boot NET="$(NET) -net nic,vlan=1,model=$(WNETMODEL) -net user,vlan=1"
++	+make boot NET="$(NET) -net nic,id=vlan1,model=$(WNETMODEL) -netdev user,id=vlan1"
+ 
+ raidboot:
+ 	+make boot DISKS="$(IMGDIR)/test1.img $(IMGDIR)/test2.img"
+
+From a738cbb1a7f47c8012b975cfbd0e7c6ba2ed800a Mon Sep 17 00:00:00 2001
+From: "Jan ONDREJ (SAL)" <ondrejj(at)salstar.sk>
+Date: Sun, 7 Jul 2019 08:29:18 +0200
+Subject: [PATCH] Added snponly.efi build.
+
+---
+ Makefile | 6 ++++--
+ 1 file changed, 4 insertions(+), 2 deletions(-)
+
+diff --git a/Makefile b/Makefile
+index cebffe66b73da431ad54317d73a76e2b44424573..53ff209e5cd1f58bb45a73c14706cc1e2cc887b7 100644
+--- a/Makefile
++++ b/Makefile
+@@ -6,7 +6,8 @@ TARGETS=\
+ 	bin/ipxe.usb\
+ 	bin/undionly.kpxe\
+ 	bin/virtio-net.rom\
+-	bin-x86_64-efi/ipxe.efi
++	bin-x86_64-efi/ipxe.efi\
++	bin-x86_64-efi/snponly.efi
+ IPXECONFIGS="" com1 com2
+ MEM=2048
+ OUT=gtk
+@@ -47,7 +48,8 @@ rsync:	images/modules.cgz sigs
+ 	  --exclude='**/.git' --exclude='**/rsync' --exclude='src/' \
+ 	  --exclude='.well-known'
+ 	# to tftp server for dhcp boot
+-	rsync -avPH --inplace ipxe/*pxe ipxe/com* ftp:/var/lib/tftpboot/ipxe/
++	rsync -avPH --inplace ipxe/*pxe ipxe/com* ipxe/*.efi \
++		ftp:/var/lib/tftpboot/ipxe/
+ 
+ TRUST=$(shell find `pwd`/certs/ -name \*.crt -o -name \*.pem | xargs echo | tr ' ' ',')
+ compile:	syslinux
+
+From 54127692ba46905020b40937c009afca65ee5986 Mon Sep 17 00:00:00 2001
+From: "Jan ONDREJ (SAL)" <ondrejj(at)salstar.sk>
+Date: Wed, 17 Jul 2019 16:58:16 +0200
+Subject: [PATCH] Added Mageia 7.1 and some other versions. Added
+ firefox-wayland to Fedora pkgs.
+
+---
+ Makefile | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/Makefile b/Makefile
+index 53ff209e5cd1f58bb45a73c14706cc1e2cc887b7..a3e26bde73469969d880aa824557acd5e6ff73f7 100644
+--- a/Makefile
++++ b/Makefile
+@@ -58,7 +58,7 @@ compile:	syslinux
+ 			TRUST=$(TRUST) $(TARGETS) NO_WERROR=1 $(IPXE_OPTS) \
+ 			CONFIG=$$config $(ARGS); \
+ 		for i in $(TARGETS); do \
+-			cp -a $(IPXEDIR)/$$i ipxe/$$config/; \
++			cp -av $(IPXEDIR)/$$i ipxe/$$config/; \
+ 		done; \
+ 	done
+ 
+
+From 37b7c5a68619791161e9bcd72120cb330d81885f Mon Sep 17 00:00:00 2001
+From: "Jan ONDREJ (SAL)" <ondrejj(at)salstar.sk>
+Date: Sun, 29 Sep 2019 20:09:05 +0200
+Subject: [PATCH] Boot testing on 2 cores by default. Removed CentOS 5
+ (unsupported upstream). Added CentOS 8 stream. Predefined system updates.
+
+---
+ Makefile | 5 +++--
+ 1 file changed, 3 insertions(+), 2 deletions(-)
+
+diff --git a/Makefile b/Makefile
+index a3e26bde73469969d880aa824557acd5e6ff73f7..7681d0335592c9cd5ffaf8db6cb39939e5c93051 100644
+--- a/Makefile
++++ b/Makefile
+@@ -10,6 +10,7 @@ TARGETS=\
+ 	bin-x86_64-efi/snponly.efi
+ IPXECONFIGS="" com1 com2
+ MEM=2048
++CPU=-smp 2
+ OUT=gtk
+ MONITOR=stdio
+ NETMODEL=virtio
+@@ -79,7 +80,7 @@ images/modules.cgz: images/pmagic/scripts/*
+ #	qemu-img create $@ 8G
+ 
+ boot:	all
+-	qemu-kvm -m $(MEM) -kernel ipxe/$(BOOTCONFIG)/ipxe.lkrn \
++	qemu-kvm -m $(MEM) $(CPU) -kernel ipxe/$(BOOTCONFIG)/ipxe.lkrn \
+ 		-monitor $(MONITOR) $(USB) -display $(OUT) \
+ 		$(NET) \
+ 		$(PARAMS) \
+@@ -87,7 +88,7 @@ boot:	all
+ 	@echo ""
+ 
+ onlyboot:
+-	qemu-kvm -m $(MEM) -kernel ipxe/$(BOOTCONFIG)/ipxe.lkrn \
++	qemu-kvm -m $(MEM) $(CPU) -kernel ipxe/$(BOOTCONFIG)/ipxe.lkrn \
+ 		-monitor $(MONITOR) $(USB) -display $(OUT) \
+ 		$(NET) \
+ 		$(PARAMS) \
+
+From ff87fc90f374764608426037e33309d700ba3fba Mon Sep 17 00:00:00 2001
+From: "Jan ONDREJ (SAL)" <ondrejj(at)salstar.sk>
+Date: Wed, 26 Feb 2020 13:04:54 +0100
+Subject: [PATCH] Added RNG to testing virtual machine.
+
+---
+ Makefile | 5 +++--
+ 1 file changed, 3 insertions(+), 2 deletions(-)
+
+diff --git a/Makefile b/Makefile
+index 7681d0335592c9cd5ffaf8db6cb39939e5c93051..ca9fb88816be22e170da869e41b550fec396654c 100644
+--- a/Makefile
++++ b/Makefile
+@@ -18,6 +18,7 @@ WNETMODEL=e1000
+ #NETOPTS=,ipv4
+ NET=-net nic,model=$(NETMODEL) -net user,hostfwd=tcp::2220-:22$(NETOPTS)
+ USB=-usb -device usb-tablet
++RNG=-object rng-random,id=rng0,filename=/dev/urandom -device virtio-rng-pci,rng=rng0,id=rng0
+ PARAMS:=
+ MAIN_SCRIPT=menu.ipxe
+ BOOTCONFIG=com1
+@@ -82,7 +83,7 @@ images/modules.cgz: images/pmagic/scripts/*
+ boot:	all
+ 	qemu-kvm -m $(MEM) $(CPU) -kernel ipxe/$(BOOTCONFIG)/ipxe.lkrn \
+ 		-monitor $(MONITOR) $(USB) -display $(OUT) \
+-		$(NET) \
++		$(NET) $(RNG) \
+ 		$(PARAMS) \
+ 		$(ARGS)
+ 	@echo ""
+@@ -90,7 +91,7 @@ boot:	all
+ onlyboot:
+ 	qemu-kvm -m $(MEM) $(CPU) -kernel ipxe/$(BOOTCONFIG)/ipxe.lkrn \
+ 		-monitor $(MONITOR) $(USB) -display $(OUT) \
+-		$(NET) \
++		$(NET) $(RNG) \
+ 		$(PARAMS) \
+ 		$(ARGS)
+ 	@echo ""
+
+From 137b488ff7191e7f224a4bbb776d0fbff6ccbbdb Mon Sep 17 00:00:00 2001
+From: "Jan ONDREJ (SAL)" <ondrejj(at)salstar.sk>
+Date: Tue, 19 May 2020 20:33:27 +0200
+Subject: [PATCH] Various updates.
+
+---
+ Makefile | 12 +++++++++---
+ 1 file changed, 9 insertions(+), 3 deletions(-)
+
+diff --git a/Makefile b/Makefile
+index ca9fb88816be22e170da869e41b550fec396654c..65f9ddf0728a98eef952cdcb4b9eb5cd5754d42e 100644
+--- a/Makefile
++++ b/Makefile
+@@ -23,12 +23,13 @@ PARAMS:=
+ MAIN_SCRIPT=menu.ipxe
+ BOOTCONFIG=com1
+ BOOTFILE=ipxe/com1/undionly.kpxe
++BOOTORDER=nc
+ UNAME=$(shell uname -r)
+ MEMTEST_VERSION=$(shell	awk '/^set memtest_version / { print $$3 }' tools.ipxe)
+ C32S=hdt menu sysdump
+ IMGDIR=/opt/img/test
+ #DISKS=$(IMGDIR)/test.img
+-DISKS=/dev/vg_work/qemu_test1
++DISKS=/dev/vg_work/qemu_test1,format=raw
+ DISKDRV="virtio"
+ CACHE="none"
+ #DISKS_FULL_PATH+=$(foreach disk,$(DISKS), $(IMGDIR)/$(disk))
+@@ -58,12 +59,16 @@ compile:	syslinux
+ 	for config in $(IPXECONFIGS); do \
+ 		make -j4 -C $(IPXEDIR) EMBEDDED_IMAGE=`pwd`/link.ipxe \
+ 			TRUST=$(TRUST) $(TARGETS) NO_WERROR=1 $(IPXE_OPTS) \
+-			CONFIG=$$config $(ARGS); \
++			CONFIG=$$config $(ARGS) \
++			EXTRA_CFLAGS="-fcommon -fno-pie"; \
+ 		for i in $(TARGETS); do \
+ 			cp -av $(IPXEDIR)/$$i ipxe/$$config/; \
+ 		done; \
+ 	done
+ 
++ipxe_clean:
++	+make -C $(IPXEDIR) clean distclean
++
+ updatesrc:
+ 	cd src; git-update-show
+ 
+@@ -81,7 +86,8 @@ images/modules.cgz: images/pmagic/scripts/*
+ #	qemu-img create $@ 8G
+ 
+ boot:	all
+-	qemu-kvm -m $(MEM) $(CPU) -kernel ipxe/$(BOOTCONFIG)/ipxe.lkrn \
++	qemu-kvm -m $(MEM) $(CPU) -boot $(BOOTORDER) \
++		-kernel ipxe/$(BOOTCONFIG)/ipxe.lkrn \
+ 		-monitor $(MONITOR) $(USB) -display $(OUT) \
+ 		$(NET) $(RNG) \
+ 		$(PARAMS) \
+
+From 5454243f473900149751dbb2282682ee377f8cf3 Mon Sep 17 00:00:00 2001
+From: "Jan ONDREJ (SAL)" <ondrejj(at)salstar.sk>
+Date: Mon, 8 Jun 2020 19:38:54 +0200
+Subject: [PATCH] UEFI support added. OS version updates.
+
+---
+ Makefile | 8 ++++----
+ 1 file changed, 4 insertions(+), 4 deletions(-)
+
+diff --git a/Makefile b/Makefile
+index 65f9ddf0728a98eef952cdcb4b9eb5cd5754d42e..ae546f432be9ae9e48468228ee0dacf801c8e518 100644
+--- a/Makefile
++++ b/Makefile
+@@ -23,7 +23,7 @@ PARAMS:=
+ MAIN_SCRIPT=menu.ipxe
+ BOOTCONFIG=com1
+ BOOTFILE=ipxe/com1/undionly.kpxe
+-BOOTORDER=nc
++BOOTORDER=c
+ UNAME=$(shell uname -r)
+ MEMTEST_VERSION=$(shell	awk '/^set memtest_version / { print $$3 }' tools.ipxe)
+ C32S=hdt menu sysdump
+@@ -58,9 +58,9 @@ TRUST=$(shell find `pwd`/certs/ -name \*.crt -o -name \*.pem | xargs echo | tr '
+ compile:	syslinux
+ 	for config in $(IPXECONFIGS); do \
+ 		make -j4 -C $(IPXEDIR) EMBEDDED_IMAGE=`pwd`/link.ipxe \
+-			TRUST=$(TRUST) $(TARGETS) NO_WERROR=1 $(IPXE_OPTS) \
++			TRUST=$(TRUST) $(TARGETS) $(IPXE_OPTS) \
+ 			CONFIG=$$config $(ARGS) \
+-			EXTRA_CFLAGS="-fcommon -fno-pie"; \
++			NO_WERROR=1 EXTRA_CFLAGS="-fcommon"; \
+ 		for i in $(TARGETS); do \
+ 			cp -av $(IPXEDIR)/$$i ipxe/$$config/; \
+ 		done; \
+@@ -86,7 +86,7 @@ images/modules.cgz: images/pmagic/scripts/*
+ #	qemu-img create $@ 8G
+ 
+ boot:	all
+-	qemu-kvm -m $(MEM) $(CPU) -boot $(BOOTORDER) \
++	qemu-kvm -m $(MEM) $(CPU) -boot once=$(BOOTORDER) \
+ 		-kernel ipxe/$(BOOTCONFIG)/ipxe.lkrn \
+ 		-monitor $(MONITOR) $(USB) -display $(OUT) \
+ 		$(NET) $(RNG) \
+
+From 2527bc3a360c98aade5ba52d5cebdba4ac6efdad Mon Sep 17 00:00:00 2001
+From: "Jan ONDREJ (SAL)" <ondrejj(at)salstar.sk>
+Date: Tue, 9 Jun 2020 20:40:15 +0200
+Subject: [PATCH] "make efiboot" to test EFI booting. Clonezilla updates, also
+ allow booting on EFI systems.
+
+---
+ Makefile | 19 +++++++++++++------
+ 1 file changed, 13 insertions(+), 6 deletions(-)
+
+diff --git a/Makefile b/Makefile
+index ae546f432be9ae9e48468228ee0dacf801c8e518..94542e0ea9e79e3a1a60b5337d8547de0b06498c 100644
+--- a/Makefile
++++ b/Makefile
+@@ -23,7 +23,9 @@ PARAMS:=
+ MAIN_SCRIPT=menu.ipxe
+ BOOTCONFIG=com1
+ BOOTFILE=ipxe/com1/undionly.kpxe
++BOOTFILE_EFI=ipxe/com1/ipxe.efi
+ BOOTORDER=c
++EFI_BIOS=/usr/share/edk2/ovmf/OVMF_CODE.fd
+ UNAME=$(shell uname -r)
+ MEMTEST_VERSION=$(shell	awk '/^set memtest_version / { print $$3 }' tools.ipxe)
+ C32S=hdt menu sysdump
+@@ -88,16 +90,16 @@ images/modules.cgz: images/pmagic/scripts/*
+ boot:	all
+ 	qemu-kvm -m $(MEM) $(CPU) -boot once=$(BOOTORDER) \
+ 		-kernel ipxe/$(BOOTCONFIG)/ipxe.lkrn \
+-		-monitor $(MONITOR) $(USB) -display $(OUT) \
+-		$(NET) $(RNG) \
++		-monitor $(MONITOR) -display $(OUT) \
++		$(NET) $(USB) $(RNG) \
+ 		$(PARAMS) \
+ 		$(ARGS)
+ 	@echo ""
+ 
+ onlyboot:
+ 	qemu-kvm -m $(MEM) $(CPU) -kernel ipxe/$(BOOTCONFIG)/ipxe.lkrn \
+-		-monitor $(MONITOR) $(USB) -display $(OUT) \
+-		$(NET) $(RNG) \
++		-monitor $(MONITOR) -display $(OUT) \
++		$(NET) $(USB) $(RNG) \
+ 		$(PARAMS) \
+ 		$(ARGS)
+ 	@echo ""
+@@ -111,9 +113,14 @@ wboot:
+ raidboot:
+ 	+make boot DISKS="$(IMGDIR)/test1.img $(IMGDIR)/test2.img"
+ 
+-undi:	all
++undiboot:	all
+ 	qemu-kvm -m $(MEM) $(NET),tftp=`pwd`,bootfile=$(BOOTFILE) -boot n \
+-		-display $(OUT) $(USB) $(PARAMS) $(ARGS)
++		-display $(OUT) $(USB) $(RNG) $(PARAMS) $(ARGS)
++
++efiboot:	all
++	qemu-kvm -m $(MEM) $(NET),tftp=`pwd`,bootfile=$(BOOTFILE_EFI) \
++		-boot n -bios $(EFI_BIOS) \
++		-display $(OUT) $(USB) $(RNG) $(PARAMS) $(ARGS)
+ 
+ #freedos:
+ #	zip /tmp/fd11live.img.zip fd11live.img
+
+From ee7616e7930409610fc4807b71219d9e1a4247da Mon Sep 17 00:00:00 2001
+From: "Jan ONDREJ (SAL)" <ondrejj(at)salstar.sk>
+Date: Thu, 23 Jul 2020 11:54:54 +0200
+Subject: [PATCH] Updated OS versions. Removed -fcommon flag applied in ipxe
+ upstream.
+
+---
+ Makefile | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/Makefile b/Makefile
+index 94542e0ea9e79e3a1a60b5337d8547de0b06498c..baf7a5171e4ebce31cad61615df4037cbb6e54f4 100644
+--- a/Makefile
++++ b/Makefile
+@@ -62,7 +62,7 @@ compile:	syslinux
+ 		make -j4 -C $(IPXEDIR) EMBEDDED_IMAGE=`pwd`/link.ipxe \
+ 			TRUST=$(TRUST) $(TARGETS) $(IPXE_OPTS) \
+ 			CONFIG=$$config $(ARGS) \
+-			NO_WERROR=1 EXTRA_CFLAGS="-fcommon"; \
++			NO_WERROR=1; \
+ 		for i in $(TARGETS); do \
+ 			cp -av $(IPXEDIR)/$$i ipxe/$$config/; \
+ 		done; \
+
+From b05e3f9908a0f596e7cf9addd86294b120b18188 Mon Sep 17 00:00:00 2001
+From: "Jan ONDREJ (SAL)" <ondrejj(at)salstar.sk>
+Date: Sun, 4 Oct 2020 13:50:37 +0200
+Subject: [PATCH] Allow boot testing with mirror on LVM.
+
+---
+ Makefile | 6 ++++--
+ 1 file changed, 4 insertions(+), 2 deletions(-)
+
+diff --git a/Makefile b/Makefile
+index baf7a5171e4ebce31cad61615df4037cbb6e54f4..c01a700a58f831538dd46651f61a951d61204362 100644
+--- a/Makefile
++++ b/Makefile
+@@ -31,7 +31,9 @@ MEMTEST_VERSION=$(shell	awk '/^set memtest_version / { print $$3 }' tools.ipxe)
+ C32S=hdt menu sysdump
+ IMGDIR=/opt/img/test
+ #DISKS=$(IMGDIR)/test.img
+-DISKS=/dev/vg_work/qemu_test1,format=raw
++DISK1=/dev/vg_work/qemu_test1,format=raw
++DISK2=/dev/vg_work/qemu_test2,format=raw
++DISKS=$(DISK1)
+ DISKDRV="virtio"
+ CACHE="none"
+ #DISKS_FULL_PATH+=$(foreach disk,$(DISKS), $(IMGDIR)/$(disk))
+@@ -111,7 +113,7 @@ wboot:
+ 	+make boot NET="$(NET) -net nic,id=vlan1,model=$(WNETMODEL) -netdev user,id=vlan1"
+ 
+ raidboot:
+-	+make boot DISKS="$(IMGDIR)/test1.img $(IMGDIR)/test2.img"
++	+make boot DISKS="$(DISK1) $(DISK2)"
+ 
+ undiboot:	all
+ 	qemu-kvm -m $(MEM) $(NET),tftp=`pwd`,bootfile=$(BOOTFILE) -boot n \
+
+From 89ee52cf3bd1029feda0ad7f7b425b73e4b3ec11 Mon Sep 17 00:00:00 2001
+From: "Jan ONDREJ (SAL)" <ondrejj(at)salstar.sk>
+Date: Mon, 19 Oct 2020 08:00:01 +0200
+Subject: [PATCH] OpenBSD update to 6.8. Added ramboot for fast testing.
+
+---
+ Makefile | 4 ++++
+ 1 file changed, 4 insertions(+)
+
+diff --git a/Makefile b/Makefile
+index c01a700a58f831538dd46651f61a951d61204362..be86f1de56589e010a723f361ff2721e2ccbe9ff 100644
+--- a/Makefile
++++ b/Makefile
+@@ -112,6 +112,10 @@ textboot:
+ wboot:
+ 	+make boot NET="$(NET) -net nic,id=vlan1,model=$(WNETMODEL) -netdev user,id=vlan1"
+ 
++ramboot:
++	qemu-img create /tmp/test1.img 10g
++	+make boot DISKS=/tmp/test1.img,format=raw CACHE=writeback
++
+ raidboot:
+ 	+make boot DISKS="$(DISK1) $(DISK2)"
+ 
+
+From 234ce058065bac524e97908bed8f8cb2816ded0d Mon Sep 17 00:00:00 2001
+From: "Jan ONDREJ (SAL)" <ondrejj(at)salstar.sk>
+Date: Thu, 14 Jan 2021 19:46:39 +0100
+Subject: [PATCH] Added combined.iso to boot in efi and pcbios modes.
+
+---
+ Makefile | 11 +++++++++++
+ 1 file changed, 11 insertions(+)
+
+diff --git a/Makefile b/Makefile
+index be86f1de56589e010a723f361ff2721e2ccbe9ff..cc5cc56ea63f029d05422926d93decc6595a4c98 100644
+--- a/Makefile
++++ b/Makefile
+@@ -8,6 +8,8 @@ TARGETS=\
+ 	bin/virtio-net.rom\
+ 	bin-x86_64-efi/ipxe.efi\
+ 	bin-x86_64-efi/snponly.efi
++ARM_TARGETS=\
++	bin-arm32-efi/snp.efi
+ IPXECONFIGS="" com1 com2
+ MEM=2048
+ CPU=-smp 2
+@@ -65,9 +67,18 @@ compile:	syslinux
+ 			TRUST=$(TRUST) $(TARGETS) $(IPXE_OPTS) \
+ 			CONFIG=$$config $(ARGS) \
+ 			NO_WERROR=1; \
++		make -j4 -C $(IPXEDIR) EMBEDDED_IMAGE=`pwd`/link.ipxe \
++			TRUST=$(TRUST) $(ARM_TARGETS) $(IPXE_OPTS) \
++			CROSS_COMPILE=arm-linux-gnu- ARCH=arm32 \
++			CONFIG=rpi $(ARGS) \
++			NO_WERROR=1; \
+ 		for i in $(TARGETS); do \
+ 			cp -av $(IPXEDIR)/$$i ipxe/$$config/; \
+ 		done; \
++		$(IPXEDIR)/util/genfsimg -p 256 -o ipxe/$$config/combined.iso \
++			$(IPXEDIR)/bin-x86_64-efi/ipxe.efi \
++			$(IPXEDIR)/bin-arm32-efi/snp.efi \
++			$(IPXEDIR)/bin/ipxe.lkrn; \
+ 	done
+ 
+ ipxe_clean:
+
+From 33294a6537498ea4514b258b6db474c11c0c8871 Mon Sep 17 00:00:00 2001
+From: "Jan ONDREJ (SAL)" <ondrejj(at)salstar.sk>
+Date: Tue, 26 Jan 2021 11:42:22 +0100
+Subject: [PATCH] Combined iso (pcbios, efi and arm). Added default CA-trust
+ from Fedora. Gparted version updates.
+
+---
+ Makefile | 15 ++++++++++++---
+ 1 file changed, 12 insertions(+), 3 deletions(-)
+
+diff --git a/Makefile b/Makefile
+index cc5cc56ea63f029d05422926d93decc6595a4c98..3ddda1731db59e0ee4a5fa703218b883f759abbc 100644
+--- a/Makefile
++++ b/Makefile
+@@ -2,7 +2,6 @@ IPXEDIR=src
+ TARGETS=\
+ 	bin/ipxe.lkrn\
+ 	bin/ipxe.kpxe\
+-	bin/ipxe.iso\
+ 	bin/ipxe.usb\
+ 	bin/undionly.kpxe\
+ 	bin/virtio-net.rom\
+@@ -41,6 +40,7 @@ CACHE="none"
+ #DISKS_FULL_PATH+=$(foreach disk,$(DISKS), $(IMGDIR)/$(disk))
+ override PARAMS+=$(foreach disk,$(DISKS),-drive file=$(disk),cache=$(CACHE),if=$(DISKDRV))
+ #override PARAMS+=-option-rom $(IPXEDIR)/bin/virtio-net.rom
++CA_TRUST=/usr/share/pki/ca-trust-source/ca-bundle.trust.p11-kit
+ 
+ all:	rsync pciids.ipxe
+ 
+@@ -60,7 +60,7 @@ rsync:	images/modules.cgz sigs
+ 	rsync -avPH --inplace ipxe/*pxe ipxe/com* ipxe/*.efi \
+ 		ftp:/var/lib/tftpboot/ipxe/
+ 
+-TRUST=$(shell find `pwd`/certs/ -name \*.crt -o -name \*.pem | xargs echo | tr ' ' ',')
++TRUST=$(shell find `pwd`/certs/ -name \*.crt -o -name \*.pem | xargs echo $(CA_TRUST) | tr ' ' ',')
+ compile:	syslinux
+ 	for config in $(IPXECONFIGS); do \
+ 		make -j4 -C $(IPXEDIR) EMBEDDED_IMAGE=`pwd`/link.ipxe \
+@@ -75,7 +75,9 @@ compile:	syslinux
+ 		for i in $(TARGETS); do \
+ 			cp -av $(IPXEDIR)/$$i ipxe/$$config/; \
+ 		done; \
+-		$(IPXEDIR)/util/genfsimg -p 256 -o ipxe/$$config/combined.iso \
++		cp -av $(IPXEDIR)/bin-arm32-efi/snp.efi \
++			ipxe/$$config/arm32.efi; \
++		$(IPXEDIR)/util/genfsimg -o ipxe/$$config/ipxe.iso \
+ 			$(IPXEDIR)/bin-x86_64-efi/ipxe.efi \
+ 			$(IPXEDIR)/bin-arm32-efi/snp.efi \
+ 			$(IPXEDIR)/bin/ipxe.lkrn; \
+@@ -139,6 +141,13 @@ efiboot:	all
+ 		-boot n -bios $(EFI_BIOS) \
+ 		-display $(OUT) $(USB) $(RNG) $(PARAMS) $(ARGS)
+ 
++armboot:	all
++	qemu-system-arm -M virt -m $(MEM) -device virtio-rng-pci \
++		-pflash images/arm32_efi/flash0.img \
++		-pflash images/arm32_efi/flash1.img \
++		-drive file=fat:rw:ipxe/,format=raw,media=disk \
++		-device virtio-net,netdev=n1 -netdev user,id=n1
++
+ #freedos:
+ #	zip /tmp/fd11live.img.zip fd11live.img
+ #	rsync -avP ./fd11live.img /tmp/fd11live.img.zip \
+
+From d0723749aa6fb98b8168d604efde8280e9651e81 Mon Sep 17 00:00:00 2001
+From: "Jan ONDREJ (SAL)" <ondrejj(at)salstar.sk>
+Date: Tue, 9 Feb 2021 11:34:23 +0100
+Subject: [PATCH] Better CPU for testing.
+
+---
+ Makefile | 7 ++++++-
+ 1 file changed, 6 insertions(+), 1 deletion(-)
+
+diff --git a/Makefile b/Makefile
+index 3ddda1731db59e0ee4a5fa703218b883f759abbc..33a3f45cfaebd8be1ddf7ed62fd48c97f24bb113 100644
+--- a/Makefile
++++ b/Makefile
+@@ -11,7 +11,7 @@ ARM_TARGETS=\
+ 	bin-arm32-efi/snp.efi
+ IPXECONFIGS="" com1 com2
+ MEM=2048
+-CPU=-smp 2
++CPU=-smp 2 -cpu SandyBridge-IBRS
+ OUT=gtk
+ MONITOR=stdio
+ NETMODEL=virtio
+@@ -120,8 +120,13 @@ onlyboot:
+ 	@echo ""
+ 
+ textboot:
++	# ncurses mode
+ 	+make boot OUT=curses MONITOR=vc
+ 
++noneboot:
++	# no-graphics, monitor on stdio
++	+make boot OUT=none MONITOR=stdio
++
+ wboot:
+ 	+make boot NET="$(NET) -net nic,id=vlan1,model=$(WNETMODEL) -netdev user,id=vlan1"
+ 
+
+From 42cf9bae985c6bffdc00334e78c01658301a6ee7 Mon Sep 17 00:00:00 2001
+From: "Jan ONDREJ (SAL)" <ondrejj(at)salstar.sk>
+Date: Sun, 14 Feb 2021 06:57:39 +0100
+Subject: [PATCH] Easy menu for kickstart partitioning. Fast RAM booting. Added
+ console=tty0 to console=ttyS0 to display booting on bot PC and serial
+ consoles.
+
+---
+ Makefile | 12 +++++++++---
+ 1 file changed, 9 insertions(+), 3 deletions(-)
+
+diff --git a/Makefile b/Makefile
+index 33a3f45cfaebd8be1ddf7ed62fd48c97f24bb113..71b08e7000534bd3fde5c8a00c4f687592f8f95c 100644
+--- a/Makefile
++++ b/Makefile
+@@ -35,6 +35,7 @@ IMGDIR=/opt/img/test
+ DISK1=/dev/vg_work/qemu_test1,format=raw
+ DISK2=/dev/vg_work/qemu_test2,format=raw
+ DISKS=$(DISK1)
++DISKTMP=/tmp/test1.img
+ DISKDRV="virtio"
+ CACHE="none"
+ #DISKS_FULL_PATH+=$(foreach disk,$(DISKS), $(IMGDIR)/$(disk))
+@@ -130,9 +131,11 @@ noneboot:
+ wboot:
+ 	+make boot NET="$(NET) -net nic,id=vlan1,model=$(WNETMODEL) -netdev user,id=vlan1"
+ 
+-ramboot:
+-	qemu-img create /tmp/test1.img 10g
+-	+make boot DISKS=/tmp/test1.img,format=raw CACHE=writeback
++$(DISKTMP):
++	qemu-img create $@ 10g
++
++ramboot:	$(DISKTMP)
++	+make boot DISKS=$(DISKTMP),format=raw CACHE=writeback
+ 
+ raidboot:
+ 	+make boot DISKS="$(DISK1) $(DISK2)"
+@@ -146,6 +149,9 @@ efiboot:	all
+ 		-boot n -bios $(EFI_BIOS) \
+ 		-display $(OUT) $(USB) $(RNG) $(PARAMS) $(ARGS)
+ 
++ramefiboot:	$(DISKTMP)
++	+make efiboot DISKS=$(DISKTMP),format=raw CACHE=writeback
++
+ armboot:	all
+ 	qemu-system-arm -M virt -m $(MEM) -device virtio-rng-pci \
+ 		-pflash images/arm32_efi/flash0.img \
+
+From e2fff01534cdb51f368a943bd021df1e48b3cf44 Mon Sep 17 00:00:00 2001
+From: "Jan ONDREJ (SAL)" <ondrejj(at)salstar.sk>
+Date: Thu, 4 Mar 2021 08:30:44 +0100
+Subject: [PATCH] Set fstype for efi partition to "efi" in kickstart
+ configuration. Added new testing boot options (efiboot2 for mirror on efi and
+ stdioboot). Add salstar.sk-modular repository, by default disabled.
+ Autopartition updates and some cosmetic changes.
+
+---
+ Makefile | 11 +++++++++--
+ 1 file changed, 9 insertions(+), 2 deletions(-)
+
+diff --git a/Makefile b/Makefile
+index 71b08e7000534bd3fde5c8a00c4f687592f8f95c..bc6069132baca54de327183f37b1428e05f6ef9f 100644
+--- a/Makefile
++++ b/Makefile
+@@ -124,9 +124,12 @@ textboot:
+ 	# ncurses mode
+ 	+make boot OUT=curses MONITOR=vc
+ 
+-noneboot:
++stdioboot:
+ 	# no-graphics, monitor on stdio
+-	+make boot OUT=none MONITOR=stdio
++	@echo "Use CTRL+A + C + ENTER to QEMU monitor."
++	+make boot OUT="none -nographic -serial mon:stdio" \
++		 MONITOR=vc BOOTCONFIG=""
++	reset # reset terminal
+ 
+ wboot:
+ 	+make boot NET="$(NET) -net nic,id=vlan1,model=$(WNETMODEL) -netdev user,id=vlan1"
+@@ -149,6 +152,10 @@ efiboot:	all
+ 		-boot n -bios $(EFI_BIOS) \
+ 		-display $(OUT) $(USB) $(RNG) $(PARAMS) $(ARGS)
+ 
++efiboot2:	all
++	# efi boot with 2 disks for mirror
++	+make efiboot DISKS="$(DISK1) $(DISK2)"
++
+ ramefiboot:	$(DISKTMP)
+ 	+make efiboot DISKS=$(DISKTMP),format=raw CACHE=writeback
+ 
+
+From 36fee6e1b65e90fbd5879c2ac654f7fba78feebf Mon Sep 17 00:00:00 2001
+From: "Jan ONDREJ (SAL)" <ondrejj(at)salstar.sk>
+Date: Fri, 12 Nov 2021 09:42:25 +0100
+Subject: [PATCH] Change default testing CPU to Skylake. Cleanup ks script.
+ Added AlmaLinux into predefined systems.
+
+---
+ Makefile | 10 +++++++---
+ 1 file changed, 7 insertions(+), 3 deletions(-)
+
+diff --git a/Makefile b/Makefile
+index bc6069132baca54de327183f37b1428e05f6ef9f..68af8b9df44c0bc2143125748a11a292a8e0be48 100644
+--- a/Makefile
++++ b/Makefile
+@@ -11,7 +11,7 @@ ARM_TARGETS=\
+ 	bin-arm32-efi/snp.efi
+ IPXECONFIGS="" com1 com2
+ MEM=2048
+-CPU=-smp 2 -cpu SandyBridge-IBRS
++CPU=-smp 2 -cpu Skylake-Client-noTSX-IBRS
+ OUT=gtk
+ MONITOR=stdio
+ NETMODEL=virtio
+@@ -107,7 +107,9 @@ boot:	all
+ 	qemu-kvm -m $(MEM) $(CPU) -boot once=$(BOOTORDER) \
+ 		-kernel ipxe/$(BOOTCONFIG)/ipxe.lkrn \
+ 		-monitor $(MONITOR) -display $(OUT) \
+-		$(NET) $(USB) $(RNG) \
++		$(NET) \
++		$(USB) \
++		$(RNG) \
+ 		$(PARAMS) \
+ 		$(ARGS)
+ 	@echo ""
+@@ -115,7 +117,9 @@ boot:	all
+ onlyboot:
+ 	qemu-kvm -m $(MEM) $(CPU) -kernel ipxe/$(BOOTCONFIG)/ipxe.lkrn \
+ 		-monitor $(MONITOR) -display $(OUT) \
+-		$(NET) $(USB) $(RNG) \
++		$(NET) \
++		$(USB) \
++		$(RNG) \
+ 		$(PARAMS) \
+ 		$(ARGS)
+ 	@echo ""
+
+From f60d3f6af0245c9d62ab10121b9a752e84efa5be Mon Sep 17 00:00:00 2001
+From: "Jan ONDREJ (SAL)" <ondrejj(at)salstar.sk>
+Date: Sat, 5 Feb 2022 09:21:01 +0100
+Subject: [PATCH] Kickstart rewrites, allow disk autodetection (currently only
+ detected disks are used). Increase default memory (required by centos
+ stream). Allow to specify MAC address for testing boots.
+
+---
+ Makefile | 4 ++--
+ 1 file changed, 2 insertions(+), 2 deletions(-)
+
+diff --git a/Makefile b/Makefile
+index 68af8b9df44c0bc2143125748a11a292a8e0be48..4391e624fce0b26e1d83eb86997e325c52ea1525 100644
+--- a/Makefile
++++ b/Makefile
+@@ -10,14 +10,14 @@ TARGETS=\
+ ARM_TARGETS=\
+ 	bin-arm32-efi/snp.efi
+ IPXECONFIGS="" com1 com2
+-MEM=2048
++MEM=2560
+ CPU=-smp 2 -cpu Skylake-Client-noTSX-IBRS
+ OUT=gtk
+ MONITOR=stdio
+ NETMODEL=virtio
+ WNETMODEL=e1000
+ #NETOPTS=,ipv4
+-NET=-net nic,model=$(NETMODEL) -net user,hostfwd=tcp::2220-:22$(NETOPTS)
++NET=-net nic,model=$(NETMODEL),macaddr=$(MAC) -net user,hostfwd=tcp::2220-:22$(NETOPTS)
+ USB=-usb -device usb-tablet
+ RNG=-object rng-random,id=rng0,filename=/dev/urandom -device virtio-rng-pci,rng=rng0,id=rng0
+ PARAMS:=
+
+From a386b0fd0269a5a679cd07a19fce1776a5b72623 Mon Sep 17 00:00:00 2001
+From: "Jan ONDREJ (SAL)" <ondrejj(at)salstar.sk>
+Date: Sun, 27 Feb 2022 08:51:12 +0100
+Subject: [PATCH] Kali version update. Menu updates.
+
+---
+ Makefile | 5 +++--
+ 1 file changed, 3 insertions(+), 2 deletions(-)
+
+diff --git a/Makefile b/Makefile
+index 4391e624fce0b26e1d83eb86997e325c52ea1525..7ffd958bcc44dce837ae53cb352176981433946b 100644
+--- a/Makefile
++++ b/Makefile
+@@ -17,7 +17,8 @@ MONITOR=stdio
+ NETMODEL=virtio
+ WNETMODEL=e1000
+ #NETOPTS=,ipv4
+-NET=-net nic,model=$(NETMODEL),macaddr=$(MAC) -net user,hostfwd=tcp::2220-:22$(NETOPTS)
++HOSTFWD=,hostfwd=tcp::2220-:22
++NET=-net nic,model=$(NETMODEL),macaddr=$(MAC) -net user$(HOSTFWD)$(NETOPTS)
+ USB=-usb -device usb-tablet
+ RNG=-object rng-random,id=rng0,filename=/dev/urandom -device virtio-rng-pci,rng=rng0,id=rng0
+ PARAMS:=
+@@ -136,7 +137,7 @@ stdioboot:
+ 	reset # reset terminal
+ 
+ wboot:
+-	+make boot NET="$(NET) -net nic,id=vlan1,model=$(WNETMODEL) -netdev user,id=vlan1"
++	+make boot NET="$(NET) -net nic,id=vlan1,model=$(WNETMODEL)"
+ 
+ $(DISKTMP):
+ 	qemu-img create $@ 10g
+
+From 8bfefc4a76d598ec3480e110113d9e6d41096428 Mon Sep 17 00:00:00 2001
+From: "Jan ONDREJ (SAL)" <ondrejj(at)salstar.sk>
+Date: Wed, 16 Mar 2022 12:10:13 +0100
+Subject: [PATCH] Kali version update.
+
+---
+ Makefile | 3 ++-
+ 1 file changed, 2 insertions(+), 1 deletion(-)
+
+diff --git a/Makefile b/Makefile
+index 7ffd958bcc44dce837ae53cb352176981433946b..81b303b4b1cffe9120cb692a2e1697c1b20a5cda 100644
+--- a/Makefile
++++ b/Makefile
+@@ -116,7 +116,8 @@ boot:	all
+ 	@echo ""
+ 
+ onlyboot:
+-	qemu-kvm -m $(MEM) $(CPU) -kernel ipxe/$(BOOTCONFIG)/ipxe.lkrn \
++	qemu-kvm -m $(MEM) $(CPU) -boot once=$(BOOTORDER) \
++		-kernel ipxe/$(BOOTCONFIG)/ipxe.lkrn \
+ 		-monitor $(MONITOR) -display $(OUT) \
+ 		$(NET) \
+ 		$(USB) \
+
+From d1640ac1a3e72d85e45d0f01748b529691853f8b Mon Sep 17 00:00:00 2001
+From: "Jan ONDREJ (SAL)" <ondrejj(at)salstar.sk>
+Date: Fri, 22 Jul 2022 05:40:33 +0200
+Subject: [PATCH] Exclude some useless information from public web.
+
+---
+ Makefile | 4 ++--
+ 1 file changed, 2 insertions(+), 2 deletions(-)
+
+diff --git a/Makefile b/Makefile
+index 81b303b4b1cffe9120cb692a2e1697c1b20a5cda..e79186651d486ea1d56f7fd399502fb79fdbe385 100644
+--- a/Makefile
++++ b/Makefile
+@@ -55,8 +55,8 @@ sigs:
+ 	+make -C sigs
+ 
+ rsync:	images/modules.cgz sigs
+-	rsync -avPH --inplace --delete ./ www.salstar.sk:public_html/boot/ \
+-	  --exclude='**/.git' --exclude='**/rsync' --exclude='src/' \
++	rsync -avPHC --inplace --delete ./ www.salstar.sk:public_html/boot/ \
++	  --exclude='**/.git*' --exclude='**/rsync' --exclude='src' \
+ 	  --exclude='.well-known'
+ 	# to tftp server for dhcp boot
+ 	rsync -avPH --inplace ipxe/*pxe ipxe/com* ipxe/*.efi \
+
+From d65e4de7af8da6f674b0a41495237eb33a4d8ee7 Mon Sep 17 00:00:00 2001
+From: "Jan ONDREJ (SAL)" <ondrejj(at)salstar.sk>
+Date: Sat, 28 Jan 2023 21:15:02 +0100
+Subject: [PATCH] QEMU EFI has serial console output enabled by default.
+
+---
+ Makefile | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/Makefile b/Makefile
+index e79186651d486ea1d56f7fd399502fb79fdbe385..22a116f89f2966e4c8d389b55bbb68aaa77697d7 100644
+--- a/Makefile
++++ b/Makefile
+@@ -25,7 +25,7 @@ PARAMS:=
+ MAIN_SCRIPT=menu.ipxe
+ BOOTCONFIG=com1
+ BOOTFILE=ipxe/com1/undionly.kpxe
+-BOOTFILE_EFI=ipxe/com1/ipxe.efi
++BOOTFILE_EFI=ipxe/ipxe.efi
+ BOOTORDER=c
+ EFI_BIOS=/usr/share/edk2/ovmf/OVMF_CODE.fd
+ UNAME=$(shell uname -r)

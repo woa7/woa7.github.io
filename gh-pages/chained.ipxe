@@ -1,0 +1,55 @@
+#!ipxe
+
+# Chainload boot scripts for various networks
+
+menu Please select
+item salstar Refresh from boot.salstar.sk
+item --key x netbootxyz boot.netboot.xyz [x]
+item --key f fedora boot.fedoraproject.org [f]
+#item --key c cloudboot cloudboot.nchc.org.tw/cloudboot [c]
+item --key i bootipxeorg boot.ipxe.org [i]
+choose ver || exit 0
+goto chained_${ver}
+exit 0
+
+# boot.salstar.sk
+:chained_salstar
+imgfree
+imgtrust --allow
+set console_dir
+iseq ${serial_console} ttyS0 && set console_dir com1/ ||
+iseq ${serial_console} ttyS1 && set console_dir com2/ ||
+iseq ${platform} efi && set ipxe_bin ipxe.efi || set ipxe_bin ipxe.lkrn
+chain --autofree --replace https://www.salstar.sk/boot/ipxe/${console_dir}${ipxe_bin}
+exit
+
+# cloudboot.nchc.org.tw
+:chained_cloudboot
+imgtrust --allow
+chain --autofree --replace http://cloudboot.nchc.org.tw/cloudboot/rom-image.ipxe
+exit
+
+# boot.fedoraproject.org online boot
+:chained_fedora
+echo ${cls}
+imgverify boot.fedoraproject.org.ipxe ${sigs}boot.fedoraproject.org.ipxe.sig
+chain --autofree --replace boot.fedoraproject.org.ipxe
+exit
+
+# boot.netboot.xyz
+:chained_netbootxyz
+imgtrust --allow
+chain --autofree --replace https://boot.netboot.xyz/ipxe/netboot.xyz.lkrn
+exit
+
+# boot.kernel.org - currently not working
+:chained_kernel
+imgtrust --allow
+chain --autofree --replace http://boot.kernel.org/
+exit
+
+# boot.ipxe.org
+:chained_bootipxeorg
+imgtrust --allow
+chain --autofree --replace http://boot.ipxe.org/ipxe.lkrn
+exit

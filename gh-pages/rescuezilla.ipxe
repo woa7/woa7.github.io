@@ -1,0 +1,31 @@
+#!ipxe
+
+# Rescuezilla
+# https://github.com/rescuezilla/rescuezilla/releases
+
+# Doesn't really work, unable to find /dev/sr0 after boot.
+
+set os Rescuezilla
+menu ${os} version
+item 2.0 ${os} 2.0
+item other ${os} Choose other version
+choose ver || exit 0
+
+iseq ${ver} other && echo -n ${cls}Enter version: ${} ||
+iseq ${ver} other && clear ver && read ver ||
+
+iseq ${arch} x86_64 && set rzl_arch 64bit || set rzl_arch 32bit
+
+set download https://github.com/rescuezilla/rescuezilla/releases/download
+set iso ${download}/${ver}/rescuezilla-${ver}-${rzl_arch}.iso
+
+# boot iso directly from github
+imgfree
+imgtrust --allow
+
+echo Sanbooting ${os} ${ver}. Please wait ...
+sanboot --no-describe ${iso}
+
+kernel ${url}memdisk iso raw ${params}
+initrd ${iso}
+boot

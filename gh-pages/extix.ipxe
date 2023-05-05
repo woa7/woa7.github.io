@@ -1,0 +1,10 @@
+#!ipxe
+
+# This does not really works. Testing only.
+
+set project extix
+set iso extix-64bit-lxqt-isoh-persistent-1110mb-150808.iso
+set sfboot memdisk
+#set sfboot sanboot
+imgverify sourceforge.ipxe ${sigs}sourceforge.ipxe.sig
+chain sourceforge.ipxe

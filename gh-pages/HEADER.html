@@ -1,0 +1,254 @@
+<h1>SAL's NETWORK BOOT</h1>
+
+<div>
+Network boot
+<a href="http://www.linux.org/">Linux</a>,
+<a href="http://www.bsd.org/">BSD</a>,
+<a href="http://www.freedos.org/">DOS</a>
+and tools like
+<a href="http://hdt-project.org">hdt</a>,
+<a href="http://www.memtest.org/">memtest</a>,
+...
+<br/><br/>
+
+Supported operating systems:
+<ul>
+  <li>RPM based Linux distributions:
+    <ul>
+      <li>		<a href="https://fedoraproject.org/wiki/Releases">Fedora</a> (s) (m)</li>
+      <li>		<a href="https://wiki.centos.org/About/Product">CentOS / CentOS Stream</a> (s) (m)</li>
+      <li>              <a href="https://almalinux.org/">AlmaLinux</a> (s) (m)</li>
+      <li>              <a href="https://rockylinux.org/">Rocky Linux</a> (s) (m)</li>
+      <li>		<a href="https://www.scientificlinux.org/downloads/sl-versions/">Scientific linux</a> (s) (m)</li>
+      <li>		<a href="https://en.opensuse.org/Lifetime">openSUSE</a> (m)</li>
+      <li>		<a href="https://www.mageia.org/en/support/">Mageia</a> (m)</li>
+    </ul>
+  </li>
+  <li>DEB based Linux distributions:
+    <ul>
+      <li>		<a href="https://wiki.debian.org/DebianReleases">Debian</a> (m)</li>
+      <li>		<a href="https://wiki.ubuntu.com/Releases">Ubuntu</a> (m)</li>
+    </ul>
+  </li>
+  <li>Other Linux distributions:
+    <ul>
+      <li>		<a href="http://www.slackware.com/">Slackware</a> (m)</li>
+      <li>		<a href="https://archlinux.org/releng/releases/">ArchLinux</a> (m)</li>
+      <li>		<a href="https://alpinelinux.org/releases/">Alpine Linux</a> (m)</li>
+    </ul>
+  </li>
+  <li>Live distributions:
+    <ul>
+      <li>		<a href="https://gparted.org/download.php">GParted</a> (m)</li>
+      <li>		<a href="https://clonezilla.org/downloads.php">Clonezilla</a> (s)</li>
+      <li>		<a href="http://www.system-rescue-cd.org/Download/">SystemRescueCD</a></li>
+      <li>		<a href="http://partedmagic.com/">Parted Magic</a> (s)</li>
+    </ul>
+  </li>
+  <li>BSD systems:
+    <ul>
+      <li>		<a href="http://www.openbsd.org/">OpenBSD</a> (m)</li>
+      <li>		<a href="http://www.netbsd.org/">NetBSD</a> (m)</li>
+      <li>		<a href="http://www.freebsd.org/">FreeBSD</a> (m)</li>
+      <li>		<a href="http://ghostbsd.org/">GhostBSD</a> (m)</li>
+    </ul>
+  </li>
+  <li>FreeDOS images:
+    <ul>
+      <li>		UBCD FreeDOS (s)</li>
+      <li>		<a href="http://www.ultimatebootcd.com/">Ultimate boot CD</a> (s)</li>
+      <li>		<a href="http://www.freedos.org/">FreeDOS src (installation iso)</a> (s)</li>
+    </ul>
+  </li>
+  <li>Tools:
+    <ul>
+      <li>		<a href="http://hdt-project.org/">Hardware detection tool (HDT)</a> (s)</li>
+      <li>		<a href="http://www.memtest.org/">MemTest86+</a> (s)</li>
+    </ul>
+  </li>
+</ul>
+
+Legend:<br/>
+<ul>
+  <li>(s) - signed and signature is verified before boot</li>
+  <li>(m) - booting from an official mirror</li>
+</ul>
+Requirements:<br/>
+<ul>
+  <li>x86 (32 or 64 bit) PC with network connection</li>
+</ul>
+Optional but recommended:
+<ul>
+  <li>network configuration from DHCP server</li>
+  <li>PXE enabled network card</li>
+</ul>
+
+<h3>FAQ</h3>
+<ul>
+  <li>
+  How to start?<br/>
+  Look into <a href="ipxe/">ipxe/</a> dir for how to boot your favorite system.
+  </li>
+  <li>
+  What is the shortest way to chainload this menu from another ipxe/gpxe
+  (for example from qemu's internal pxe)?<br/>
+  chain http://boot.salstar.sk<br/>
+  No need to specify filename, ipxe/gpxe user-agent is autodetected and
+  proper content will be sent.
+  </li>
+  <li>
+  What is the shortest way to call other scripts, which are not present
+  in menu?<br/>
+  Just type "chain scriptname". For example "chain lspci". No need to
+  type ".ipxe" extension, it will be added automatically.
+  </li>
+  <li>
+  Is it opensource?<br/>
+  YES! It's released under <a href="COPYING">GPL v2</a>.
+  You can download sources from my git repository:<br/>
+  git clone http://git.salstar.sk/pxeboot.git
+  </li>
+  <li>
+  Do you have more questions/suggestions?<br/>
+  Contact me at <a href="mailto:ondrejj(at)salstar.sk">ondrejj(at)salstar.sk</a>.
+  </li>
+</ul>
+
+</div>
+
+<div>
+<h3>Screenshots</h3>
+<a name="main_menu">Main menu:</a><br/>
+
+<pre class="screenshot">
+
+ <span class="title">             SAL's BOOT MENU [Local IP: 10.0.2.15 on virtio-net] </span>
+
+ <span class="gap">  Default: </span>
+ <span class="cursor">     Boot local hdd [l] </span>
+ <span class="gap">  Operating systems: </span>
+      Fedora x86_64 [f]
+      CentOS x86_64 [c]
+      AlmaLinux x86_64 [a]
+      Debian amd64 [b]
+      FreeDOS [d]
+      Chain other netboot sites [O]
+      Other systems [x]
+ <span class="gap">  Options: </span>
+      Architecture: x86_64 (64bit) [A]
+      Kernel parameters:
+ <span class="gap">  Tools: </span>
+      Hardware tools [t]
+      Predefined systems menu [.]
+      Select iPXE console [,]
+      iPXE shell [s]
+
+
+</pre><br/>
+
+<a name="extended_menu">Extended main menu:</a><br/>
+
+<pre class="screenshot">
+
+ <span class="title">             SAL's BOOT MENU [Local IP: 10.0.2.15 on virtio-net] </span>
+
+ <span class="gap">  Default: </span>
+      Boot local hdd [l]
+ <span class="gap">  Operating systems: </span>
+ <span class="cursor">     Fedora x86_64 [f] </span>
+      CentOS x86_64 [c]
+      AlmaLinux x86_64 [a]
+      Scientific Linux x86_64 [S]
+      openSUSE x86_64 [o]
+      Mageia x86_64 [M]
+      Debian amd64 [b]
+      Ubuntu amd64 [u]
+      ArchLinux [H]
+      Slackware 64 bit [L]
+      GParted 64 bit [g]
+      SystemRescue [R]
+      Clonezilla [z]
+      Tiny Core Linux [T]
+      CoreOS [C]
+      BSD systems [y]
+      FreeDOS [d]
+ <span class="gap">  ... </span>
+</pre><br/>
+
+<a name="params">Kernel parameters:</a><br/>
+
+<pre class="screenshot">
+
+ <span class="title">                              Kernel parameters </span>
+
+ <span class="gap">  Current: </span>
+
+ <span class="gap">  Basic parameters: </span>
+ <span class="cursor">     Autopartition [a] </span>
+      Disk selection [d]
+      Package selection [p]
+      Serial console ttyS0/ttyS1 [s]
+      VNC installation [v]
+ <span class="gap">  Advanced parameters: </span>
+      Text mode install [t]
+      Force en_US language [l]
+      Change predefined root password [w]
+      Custom configuration URL [c]
+      Network configuration (bonding or static) [n]
+      ksdevice configuration [k]
+ <span class="gap">  Other: </span>
+      Edit parameters [e]
+      Return to main menu [x]
+
+</pre><br/>
+
+<a name="fedora_ver">Fedora version selection:</a><br/>
+
+<pre class="screenshot">
+
+ <span class="title">                                    Fedora </span>
+
+ <span class="gap">  Current (supported) </span>
+ <span class="cursor">     Fedora 33 x86_64 [3] </span>
+      Fedora 32 x86_64 [2]
+      Fedora 31 x86_64 [1]
+ <span class="gap">  End of life (unsupported) </span>
+      Fedora 30 x86_64
+      Fedora 29 x86_64
+      Fedora 29 x86_64
+      Fedora 28 x86_64
+      Fedora 27 x86_64
+      Fedora 26 x86_64
+ <span class="gap">  Testing and development </span>
+      Fedora rawhide x86_64 [r]
+      Fedora development x86_64 [d]
+      Fedora 34_Beta x86_64 [b]
+      Fedora 34_Aplha x86_64 [a]
+      Fedora dl.fedoraproject.org/pub/alt/stage x86_64 [A]
+ <span class="gap">  Change Fedora mirror </span>
+      Use ftp.linux.cz as mirror server
+ <span class="gap">  Official netboot </span>
+      Fedora boot.fedoraproject.org [f]
+
+</pre><br/>
+
+<a name="fedora_type">Fedora installation type selection:</a><br/>
+
+<pre class="screenshot">
+
+ <span class="title">                               Fedora boot type </span>
+
+ <span class="gap">  Install: </span>
+ <span class="cursor">     Fedora 33 x86_64 </span>
+      Fedora 33 x86_64 minimal server kickstart [k]
+      Fedora 33 x86_64 desktop kickstart [d]
+ <span class="gap">  Rescue: </span>
+      Fedora 33 x86_64 rescue [r]
+      Fedora 33 x86_64 rescue with sshd [s]
+ <span class="gap">  ISO boot: </span>
+      Fedora 33 x86_64 direct boot using isolinux [i]
+
+</pre><br/>
+
+<h3>Files in this folder:</h3>
+</div>

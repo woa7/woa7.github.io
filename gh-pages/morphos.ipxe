@@ -1,0 +1,11 @@
+#!ipxe
+
+set iso https://www.morphos-team.net/morphos-3.16.iso
+
+#sanboot ${iso} || echo Trying memdisk method.
+
+imgtrust --allow
+kernel ${url}memdisk iso raw ${params}
+imgverify memdisk ${sigs}memdisk.sig
+initrd ${iso}
+boot

@@ -1,0 +1,27 @@
+<div>
+URL syntax:<br/>
+&nbsp;&nbsp;
+<a href="http://boot.salstar.sk/ks/fedora">http://boot.salstar.sk/ks/fedora</a>
+<br/>
+&nbsp;&nbsp;
+<a href="http://boot.salstar.sk/ks/centos6">http://boot.salstar.sk/ks/centos6</a>
+<br/>
+
+<pre>
+Extra kernel parameter:
+  part=root=4,vg=vg1,swap=2,var=32,home=max
+  disks=sda,sdb
+  pkgs=desktop,salpack,roxterm
+
+KVM installation command:
+
+NAME=server
+RAM=1024
+BRIDGE=lan0
+DISK0=vol=vg1/${NAME}_hda,cache=none,format=raw
+DISK1=/dev/vg1/${name}_hda,cache=none,format=raw
+virt-install -n $NAME -r $RAM --vcpus=1 \
+	--os-type=linux --os-variant=fedora13 --accelerate --vnc --pxe \
+	--bridge $BRIDGE --disk $DISK0 --disk $DISK1
+</pre>
+</div>

@@ -1,0 +1,26 @@
+#!ipxe
+
+# This does not really works. Testing only.
+
+set major 11
+set minor 4
+set patch 0
+set ver ${major}.${minor}.${patch}
+set lang Slovak
+
+set mirror http://ftp.linux.cz/pub/linux/slax
+
+set iso http://ftp.linux.cz/pub/linux/slax/Slax-${major}.x/${ver}/slax-${lang}-${ver}-${arch4}.iso
+
+#sanboot ${iso} || echo Trying memdisk method.
+
+imgtrust --allow
+#kernel ${url}memdisk iso raw ${params}
+#imgverify memdisk ${sigs}memdisk.sig
+#initrd ${iso}
+#boot
+
+kernel ${mirror}/Slax-${major}.x/ipxe/${ver}/${bits}bit/vmlinuz
+initrd ${mirror}/Slax-${major}.x/ipxe/${ver}/${bits}bit/initrfs.img
+imgargs vmlinuz initrd=initrfs.img vga=773 load_ramdisk=1 prompt_ramdisk=0 rw printk.time=1 slax.flags=perch,xmode ${params}
+boot vmlinuz

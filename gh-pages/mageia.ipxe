@@ -1,0 +1,70 @@
+#!ipxe
+
+set os Mageia
+
+menu ${os}
+item 8 ${os} ${arch5} 8
+item 7.1 ${os} ${arch5} 7.1
+item 7 ${os} ${arch5} 7
+item 6.1 ${os} ${arch5} 6.1
+item 6 ${os} ${arch5} 6
+item 5.1 ${os} ${arch5} 5.1
+item 5 ${os} ${arch5} 5
+item 4.1 ${os} ${arch5} 4.1
+item 4 ${os} ${arch5} 4
+item 3 ${os} ${arch5} 3
+item 2 ${os} ${arch5} 2
+item --gap Development version
+item cauldron ${os} ${arch5} cauldron
+item --gap Other
+item --key o other Choose other version [o]
+choose ver || exit 0
+
+iseq ${ver} other || goto skip_read_ver
+echo ${cls}
+echo -n Enter version: ${} && read ver
+:skip_read_ver
+
+menu ${os} boot type
+item normal Normal boot using vmlinuz and initrd
+item pxe PXElinux boot
+choose boot_type || exit 0
+echo ${cls}
+
+set server ftp.linux.cz
+iseq ${mirror} ${default_mirror} && set mirror http://${server}/ ||
+set dir pub/linux/mageia/distrib/${ver}/${arch5}
+set automatic method:http,network:dhcp,server:${server},directory:/${dir}
+
+goto ${boot_type}_boot
+
+:normal_boot
+iseq ${ver} 2 && goto alt0_boot ||
+iseq ${ver} 3 && goto alt0_boot ||
+imgfree
+imgtrust --allow
+kernel ${mirror}${dir}/isolinux/${arch}/vmlinuz
+initrd ${mirror}${dir}/isolinux/${arch}/all.rdz
+imgargs vmlinuz initrd=all.rdz automatic=${automatic} vga=788 splash=silent ${params}
+boot  
+exit 0
+
+:alt0_boot
+imgfree
+imgtrust --allow
+kernel ${mirror}${dir}/isolinux/alt0/vmlinuz
+initrd ${mirror}${dir}/isolinux/alt0/all.rdz
+imgargs vmlinuz initrd=all.rdz automatic=${automatic} vga=788 splash=silent ${params}
+boot
+exit 0
+
+:pxe_boot
+# pxe boot, type "alt1" or "alt0" after boot
+set 209:string isolinux.cfg
+set 210:string ${mirror}${dir}/isolinux/
+
+imgfree
+kernel ${url}pxelinux.0 ${params}  
+imgverify pxelinux.0 ${sigs}pxelinux.0.sig
+boot
+exit 0

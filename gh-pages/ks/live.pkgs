@@ -1,0 +1,202 @@
+# SAL's Live CD packages
+
+%packages
+coreutils
+fedora-release
+glibc-langpack-en
+glibc-langpack-sk
+glibc-langpack-cs
+-glibc-all-langpacks
+
+# Drop the Java plugin
+-icedtea-web
+-java-*-openjdk
+
+# No printing
+-foomatic-db-ppds
+-foomatic
+-man-pages*
+
+# Help and art can be big, too
+-gnome-*-docs
+-gnome-tour
+-evolution-help
+#-gnome-games-help
+-desktop-backgrounds-basic
+-*backgrounds-extras
+
+-anaconda
+-kdump-anaconda-addon
+
+# Drop some system-config things
+#-system-config-boot
+-system-config-language
+#-system-config-network
+-system-config-rootpassword
+#-system-config-services
+-policycoreutils-gui
+# required for selinux --disabled
+#system-config-firewall-base
+
+# Large packages
+-gnome-boxes
+-ibus-kkc
+-ibus-libpinyin
+-ibus-libzhuyin
+-libkkc*
+-libpinyin*
+-geolite2-city
+-unicode-ucd
+-ibus-typing-booster
+-gutenprint*
+-abrt*
+-*-abrt-*
+
+# SAL's changes
+
+dhclient
+dnf
+dnf-plugins-core
+openssh-clients
+openssh-server
+screen
+wget
+rsync
+which
+iptables
+joe
+mc
+parted
+-sendmail
+
+elinks
+mutt
+pv
+lvm2
+mdadm
+hdparm
+fuse-sshfs
+
+@dns-server
+
+# SAL's packages
+gnome-terminal
+kitty
+firefox
+firefox-wayland
+python3-pygame
+lshw
+devilspie2
+kpie
+gthumb
+qemu-kvm
+httptunnel
+kismet
+aircrack-ng
+clamav
+clamav-data
+clamav-update
+
+# Fonts
+-@fonts
+# don't install unnecessary fonts
+-sil-abyssinica-fonts
+-cjkuni*fonts*
+-jomolhari*fonts*
+-kacst*fonts*
+-khmeros*fonts*
+-lklug*fonts*
+-lohit*fonts*
+-sil-padauk*fonts*
+-paktype*fonts*
+-smc*fonts*
+-stix*fonts*
+-thai*fonts*
+-un-core-*fonts*
+-vlgothic*fonts*
+wqy-zenhei-fonts
+dejavu-sans-fonts
+dejavu-sans-mono-fonts
+dejavu-serif-fonts
+dejavu-lgc-sans-fonts
+liberation-mono-fonts
+liberation-sans-fonts
+liberation-serif-fonts
+
+-@admin-tools
+
+@system-tools
+-BackupPC
+-jigdo
+-sssd
+-ypbind
+-rpcbind
+-nfs-utils
+wireshark
+ngrep
+
+# GNOME shell extensions
+dconf-editor
+gnome-tweak-tool
+gnome-shell-extension-native-window-placement
+gnome-shell-extension-openweather
+#gnome-shell-extension-alternative-status-menu
+#gnome-shell-extension-cpu-temperature
+#gnome-shell-extension-alternate-tab
+gnome-shell-extension-system-monitor-applet
+
+# Office
+#@office
+-planner
+-shotwell
+remmina-plugins-*
+gimp
+gimp-data-extras
+
+fedora-repos
+
+# rpmfusion packages
+rpmfusion-free-release
+rpmfusion-nonfree-release
+vlc
+vlc-core
+#mplayer
+gstreamer1-libav
+gstreamer1-plugins-base
+gstreamer1-plugins-good
+#gstreamer1-plugins-ugly
+#gstreamer1-plugins-good-extras
+gstreamer1-plugins-bad-free
+gstreamer1-plugins-bad-freeworld
+#gstreamer1-plugins-entrans
+python3-gstreamer1
+
+# svplayer and python dependencies
+git
+ipython3
+youtube-dl
+python3-pillow
+
+# Fedora 21
+NetworkManager-wifi
+NetworkManager-bluetooth
+
+# Fedora 25
+# include libcrypt-nss to avoid conflits with automatically added libcrypt
+#-libcrypt
+#libcrypt-nss
+##libcrypt-nss.i686
+
+# Fedora 29
+-simple-scan
+-libsane-hpaio
+-sane-backends-driver*
+
+# Fedora 30
+# initscripts needed to find LiveOS home.img
+initscripts
+
+# Fedora 37
+-@x86-baremetal-tools
+
+%end

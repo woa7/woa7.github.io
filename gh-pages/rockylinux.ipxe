@@ -1,0 +1,12 @@
+#!ipxe
+
+set mirror http://download.rockylinux.org/pub
+#set mirror http://ftp.upjs.sk/pub/mirrors
+
+set params ${params} mirror=${mirror}
+
+set menu rocky
+set os RockyLinux
+imgverify fedora.ipxe ${sigs}fedora.ipxe.sig
+chain fedora.ipxe
+exit

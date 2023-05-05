@@ -1,0 +1,75 @@
+#!ipxe
+
+# This script uses unpacked Kali Linux on ftp.upjs.sk
+
+set os Kali Linux
+menu ${os}
+item --key l live ${os} Live [l]
+item --key i installer ${os} Installer [i]
+#item --key p pxe ${os} PXE chainload [p]
+choose kali_type || goto main_menu
+
+menu ${os} version
+item 2023.1 ${os} 2023.1
+item 2022.4 ${os} 2022.4
+item 2022.3 ${os} 2022.3
+item 2022.2 ${os} 2022.2
+item 2022.1 ${os} 2022.1
+item 2021.4 ${os} 2021.4
+item 2021.2 ${os} 2021.2
+item 2020.4 ${os} 2020.4
+item 2020.3 ${os} 2020.3
+item 2020.2 ${os} 2020.2
+item 2019.4 ${os} 2019.4
+choose ver || goto main_menu
+
+goto kali_boot_${kali_type}
+
+# Live from ftp.upjs.sk
+:kali_boot_live
+#set variant light
+set variant live
+set dir http://ftp.upjs.sk/pub/mirrors/kali/kali-linux-${ver}-${variant}-${arch_a}/live
+echo ${dir}
+kernel ${dir}/vmlinuz vga=788 initrd=initrd.img append boot=live components fetch=${dir}/filesystem.squashfs ${params}
+initrd ${dir}/initrd.img
+boot
+read a
+exit 0
+
+# Installer boot
+:kali_boot_installer
+#set gtk_inst gtk/
+clear gtk_inst
+set dir http://http.kali.org/kali/dists/kali-rolling/main/installer-${arch_a}/current/images/netboot/${gtk_inst}debian-installer/${arch_a}
+imgtrust --allow
+kernel ${dir}/linux
+initrd ${dir}/initrd.gz
+boot
+exit 0
+
+:kali_boot_pxe
+set dir http://http.kali.org/kali/dists/kali-rolling/main/installer-${arch_a}/current/images/netboot
+#set dir http://http.kali.org/kali/dists/kali-rolling/main/installer-${arch_a}/current/images/netboot/debian-installer/${arch_a}
+set 210:string ${dir}/boot-screens
+set 209:string ${dir}/pxelinux.cfg/default
+chain ${dir}/pxelinux.0
+exit 0
+
+# This doesn't really work, just for testing
+# Live boot
+set dir kali-${ver}/kali-linux-${ver}-${variant}-${arch_a}.iso
+iseq ${mirror} ${default_mirror} && set mirror http://cdimage.kali.org ||
+set iso ${mirror}/${dir}
+
+#set iso http://http.kali.org/kali/dists/kali-rolling/main/installer-${arch_a}/current/images/netboot/mini.iso
+#set iso http://http.kali.org/kali/dists/kali-rolling/main/installer-${arch_a}/current/images/netboot/gtk/mini.iso
+
+imgtrust --allow
+kernel ${url}memdisk iso raw ${params}
+imgverify memdisk ${sigs}memdisk.sig
+initrd ${iso}
+boot
+
+:main_menu
+exit 0

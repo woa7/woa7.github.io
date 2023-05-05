@@ -1,0 +1,14 @@
+#!ipxe
+
+set os HelenOS
+set project helenos
+set ver 0.11.2
+
+iseq ${arch} x86_64 && set helenos_arch amd64 || set helenos_arch ia32
+
+set iso ${os}-${ver}-${helenos_arch}.iso
+
+imgtrust --allow
+kernel ${url}memdisk iso raw ${params}
+initrd http://www.helenos.org/releases/${iso}
+boot

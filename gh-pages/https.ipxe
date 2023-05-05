@@ -1,0 +1,5 @@
+#!ipxe
+
+set default_mirror https://ftp.upjs.sk/pub
+set mirror ${default_mirror}
+imgfree
