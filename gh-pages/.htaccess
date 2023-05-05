@@ -1,0 +1,11 @@
+RewriteEngine  on
+
+# allow loading of .ipxe files without extension
+RewriteCond %{REQUEST_FILENAME} !-f
+RewriteCond %{REQUEST_FILENAME} !-d
+RewriteCond %{REQUEST_FILENAME}.ipxe -f
+RewriteRule ^([a-z0-9]*)$ /$1.ipxe [L]
+
+# allow booting ipxe/ipxe.kpxe by command: chain http://boot.salstar.sk
+RewriteCond %{HTTP_USER_AGENT} ^[ig]PXE/(.*)$
+RewriteRule ^$ ipxe/com1/ipxe.kpxe [L]
