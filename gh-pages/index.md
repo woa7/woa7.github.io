@@ -1,3 +1,0 @@
----
-permalink: /HEADER.html
----
